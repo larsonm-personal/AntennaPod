@@ -1,0 +1,4 @@
+<resources>
+    <item type="id" name="playback_trace_start" />
+    <item type="id" name="playback_trace_stop" />
+</resources>

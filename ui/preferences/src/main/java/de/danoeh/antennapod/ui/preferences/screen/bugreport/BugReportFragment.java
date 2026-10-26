@@ -9,6 +9,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+import android.widget.EditText;
+import android.text.InputType;
+import android.os.Build;
+import de.danoeh.antennapod.net.common.PlaybackTrace;
+import de.danoeh.antennapod.ui.preferences.BuildConfig;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -149,10 +154,22 @@ public class BugReportFragment extends AnimatedFragment {
             @Override
             public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
                 menuInflater.inflate(R.menu.bug_report_options, menu);
+                if (BuildConfig.DEBUG) {
+                    menu.add(0, R.id.playback_trace_start, 0, R.string.playback_trace_start);
+                    menu.add(0, R.id.playback_trace_stop, 1, R.string.playback_trace_stop);
+                }
             }
 
             @Override
             public boolean onMenuItemSelected(@NonNull MenuItem menuItem) {
+                if (BuildConfig.DEBUG && menuItem.getItemId() == R.id.playback_trace_start) {
+                    showPlaybackTraceDialog();
+                    return true;
+                }
+                if (BuildConfig.DEBUG && menuItem.getItemId() == R.id.playback_trace_stop) {
+                    PlaybackTrace.stop();
+                    return true;
+                }
                 if (menuItem.getItemId() == R.id.export_logcat) {
                     showExportLogcatDialog();
                     return true;
@@ -160,6 +177,36 @@ public class BugReportFragment extends AnimatedFragment {
                 return false;
             }
         }, getViewLifecycleOwner());
+    }
+
+    private void showPlaybackTraceDialog() {
+        EditText input = new EditText(requireContext());
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        input.setSingleLine(true);
+        input.setSaveEnabled(false);
+        if (Build.VERSION.SDK_INT >= 26) {
+            input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
+        }
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.playback_trace_start)
+                .setMessage(R.string.playback_trace_instructions)
+                .setView(input)
+                .setPositiveButton(R.string.confirm_label, (dialog, which) -> {
+                    String target = input.getText().toString().trim();
+                    Uri uri = Uri.parse(target);
+                    if (("https".equals(uri.getScheme()) || "http".equals(uri.getScheme()))
+                            && uri.getHost() != null) {
+                        PlaybackTrace.start(target);
+                        Snackbar.make(viewBinding.getRoot(), R.string.playback_trace_started,
+                                Snackbar.LENGTH_LONG).show();
+                    } else {
+                        Snackbar.make(viewBinding.getRoot(), R.string.playback_trace_invalid,
+                                Snackbar.LENGTH_LONG).show();
+                    }
+                    input.setText("");
+                })
+                .setNegativeButton(R.string.cancel_label, null)
+                .show();
     }
 
     private void showExportLogcatDialog() {

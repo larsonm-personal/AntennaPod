@@ -59,11 +59,16 @@ public abstract class RedirectChecker {
             return url;
         }
         try {
-            Request httpReq = new Request.Builder().url(url).head().build();
+            Request httpReq = new Request.Builder().url(url).head()
+                    .tag(PlaybackTrace.HeadRequest.class,
+                            PlaybackTrace.matches(url) ? new PlaybackTrace.HeadRequest(url) : null).build();
             Response response = AntennapodHttpClient.getHttpClient().newCall(httpReq).execute();
             response.close();
             return response.request().url().toString();
         } catch (IOException e) {
+            if (PlaybackTrace.matches(url)) {
+                PlaybackTrace.record(PlaybackTrace.Event.HEAD_FAILURE);
+            }
             Log.e(TAG, "Failed to follow redirects for " + url + ": " + e.getMessage());
             return url;
         }

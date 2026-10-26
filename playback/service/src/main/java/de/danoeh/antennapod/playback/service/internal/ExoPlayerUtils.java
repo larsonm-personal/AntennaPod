@@ -19,6 +19,8 @@ import androidx.media3.datasource.cache.CacheDataSource;
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import de.danoeh.antennapod.net.common.RedirectChecker;
+import de.danoeh.antennapod.net.common.PlaybackTrace;
+import de.danoeh.antennapod.playback.service.BuildConfig;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -57,7 +59,7 @@ public class ExoPlayerUtils {
                     new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024),
                     new StandaloneDatabaseProvider(context));
         }
-        return new ExoPlayer.Builder(context, renderersFactory)
+        ExoPlayer player = new ExoPlayer.Builder(context, renderersFactory)
                 .setLoadControl(new DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
                                 (int) TimeUnit.HOURS.toMillis(1),
@@ -74,6 +76,10 @@ public class ExoPlayerUtils {
                 .setSeekParameters(SeekParameters.EXACT)
                 .setHandleAudioBecomingNoisy(UserPreferences.isPauseOnHeadsetDisconnect())
                 .build();
+        if (BuildConfig.DEBUG) {
+            PlaybackDiagnostics.attach(player);
+        }
+        return player;
     }
 
     public static void releaseCache() {
@@ -168,16 +174,28 @@ public class ExoPlayerUtils {
                 httpDataSourceFactory.setDefaultRequestProperties(
                         Collections.singletonMap("Authorization", authHeader));
             }
-            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpDataSourceFactory);
+            String source = mediaItem.localConfiguration != null ? mediaItem.localConfiguration.uri.toString() : "";
+            DataSource.Factory networkFactory = BuildConfig.DEBUG
+                    ? () -> new PlaybackDiagnostics(httpDataSourceFactory.createDataSource(),
+                            source, authHeader != null)
+                    : httpDataSourceFactory;
+            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, networkFactory);
             DataSource.Factory resolvingFactory = new ResolvingDataSource.Factory(dataSourceFactory, dataSpec -> {
                 String originalUrl = dataSpec.uri.toString();
                 if (!originalUrl.startsWith("http")) {
                     return dataSpec;
                 }
                 String resolvedUrl = redirectCache.get(originalUrl);
+                boolean cached = resolvedUrl != null;
                 if (resolvedUrl == null) {
                     resolvedUrl = RedirectChecker.getFinalUrl(originalUrl);
                     redirectCache.putIfAbsent(originalUrl, resolvedUrl);
+                }
+                if (PlaybackTrace.matches(source)) {
+                    PlaybackTrace.record(PlaybackTrace.Event.RESOLVE, PlaybackTrace.identity(originalUrl),
+                            PlaybackTrace.identity(resolvedUrl), cached ? 1 : 0);
+                    PlaybackTrace.detail("resolver.original", originalUrl);
+                    PlaybackTrace.detail("resolver.resolved", resolvedUrl);
                 }
                 if (resolvedUrl.equals(originalUrl)) {
                     return dataSpec;
@@ -189,6 +207,22 @@ public class ExoPlayerUtils {
             if (uri.startsWith("http")) {
                 return new CacheDataSource.Factory()
                         .setCache(simpleCache)
+                        .setEventListener(new CacheDataSource.EventListener() {
+                            @Override
+                            public void onCachedBytesRead(long cacheSizeBytes, long cachedBytesRead) {
+                                if (PlaybackTrace.matches(source)) {
+                                    PlaybackTrace.record(PlaybackTrace.Event.CACHE,
+                                            PlaybackTrace.identity(source), cacheSizeBytes, cachedBytesRead);
+                                }
+                            }
+
+                            @Override
+                            public void onCacheIgnored(int reason) {
+                                if (PlaybackTrace.matches(source)) {
+                                    PlaybackTrace.record(PlaybackTrace.Event.CACHE_IGNORED, reason);
+                                }
+                            }
+                        })
                         .setUpstreamDataSourceFactory(resolvingFactory);
             }
             return resolvingFactory;

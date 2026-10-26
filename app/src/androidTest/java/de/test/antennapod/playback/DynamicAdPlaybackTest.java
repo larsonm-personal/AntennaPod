@@ -15,6 +15,7 @@ import androidx.test.filters.LargeTest;
 import androidx.test.platform.app.InstrumentationRegistry;
 import de.danoeh.antennapod.playback.service.internal.ExoPlayerUtils;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
+import de.danoeh.antennapod.net.common.PlaybackTrace;
 import de.test.antennapod.util.service.download.HTTPBin;
 import org.apache.commons.io.IOUtils;
 import org.awaitility.Awaitility;
@@ -28,6 +29,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -51,6 +53,7 @@ public class DynamicAdPlaybackTest {
     private File initial;
     private File changed;
     private volatile long playerPosition;
+    private String traceUrl;
 
     @Before
     public void setUp() throws Exception {
@@ -79,6 +82,7 @@ public class DynamicAdPlaybackTest {
             }
             ExoPlayerUtils.releaseCache();
         });
+        PlaybackTrace.stop();
         server.stop();
         if (initial != null) {
             initial.delete();
@@ -121,6 +125,44 @@ public class DynamicAdPlaybackTest {
         assertContinuous(changed);
     }
 
+    @Test
+    public void privateTraceRecordsNetworkCacheAndPlayback() throws Exception {
+        traceUrl = server.getBaseUrl() + "/dynamic-ad/PRIVATE?token=SECRET&next=https%3A%2F%2Fprivate.invalid%2FSECRET";
+        PlaybackTrace.start(traceUrl);
+        assertContinuous(initial);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.stop();
+            player.setMediaItem(MediaItem.fromUri(traceUrl));
+            player.prepare();
+            player.play();
+        });
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(
+                    () -> playerPosition = player.getCurrentPosition());
+            return playerPosition > 2000;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.release();
+            player = null;
+        });
+        PlaybackTrace.stop();
+        String export;
+        Process logs = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-s", "PlaybackTrace:D", "*:S"});
+        try (InputStream input = logs.getInputStream()) {
+            export = IOUtils.toString(input, StandardCharsets.UTF_8);
+        }
+        assertTrue(export.contains(" HEAD "));
+        assertTrue(export.contains(" OPEN "));
+        assertTrue(export.contains(" RANGE "));
+        assertTrue(export.contains(" POSITION "));
+        assertTrue(export.contains(" CACHE "));
+        assertTrue(export.contains("SECRET"));
+        assertTrue(export.contains("finalUrl"));
+        assertTrue(export.contains("User-Agent"));
+        assertTrue(export.contains("Range"));
+
+    }
+
     private void assertContinuous(File reconnected) throws Exception {
         server.serveDynamicAds(initial, reconnected, DISCONNECT_BYTE);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -133,7 +175,8 @@ public class DynamicAdPlaybackTest {
             });
             player.setSkipSilenceEnabled(false);
             player.setPlaybackSpeed(1);
-            player.setMediaItem(MediaItem.fromUri(server.getBaseUrl() + "/dynamic-ad/" + initial.getName()));
+            player.setMediaItem(MediaItem.fromUri(traceUrl != null
+                    ? traceUrl : server.getBaseUrl() + "/dynamic-ad/" + initial.getName()));
             player.prepare();
             player.play();
         });
