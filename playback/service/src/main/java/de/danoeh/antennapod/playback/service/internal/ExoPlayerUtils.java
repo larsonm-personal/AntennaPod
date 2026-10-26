@@ -20,7 +20,9 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import de.danoeh.antennapod.net.common.RedirectChecker;
 import androidx.media3.exoplayer.DefaultLoadControl;
+import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.RenderersFactory;
 import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
@@ -45,12 +47,17 @@ public class ExoPlayerUtils {
 
     @OptIn(markerClass = UnstableApi.class)
     public static ExoPlayer buildPlayer(Context context) {
+        return buildPlayer(context, new DefaultRenderersFactory(context));
+    }
+
+    @OptIn(markerClass = UnstableApi.class)
+    public static ExoPlayer buildPlayer(Context context, RenderersFactory renderersFactory) {
         if (simpleCache == null) {
             simpleCache = new SimpleCache(new File(context.getCacheDir(), "streaming"),
                     new LeastRecentlyUsedCacheEvictor(100 * 1024 * 1024),
                     new StandaloneDatabaseProvider(context));
         }
-        return new ExoPlayer.Builder(context)
+        return new ExoPlayer.Builder(context, renderersFactory)
                 .setLoadControl(new DefaultLoadControl.Builder()
                         .setBufferDurationsMs(
                                 (int) TimeUnit.HOURS.toMillis(1),

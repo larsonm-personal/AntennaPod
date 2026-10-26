@@ -45,6 +45,63 @@ public class HTTPBin extends NanoHTTPD {
     private static final String MIME_PLAIN = "text/plain";
 
     private final List<File> servedFiles;
+    private File initialEpisode;
+    private File reconnectedEpisode;
+    private int disconnectByte;
+    private int episodeRequests;
+    private long resumedByte = -1;
+
+    public synchronized void serveDynamicAds(File initial, File reconnected, int disconnectByte) {
+        initialEpisode = initial;
+        reconnectedEpisode = reconnected;
+        this.disconnectByte = disconnectByte;
+        episodeRequests = 0;
+        resumedByte = -1;
+    }
+
+    public synchronized long getResumedByte() {
+        return resumedByte;
+    }
+
+    private synchronized Response getDynamicAdResponse(IHTTPSession session) throws IOException {
+        boolean head = session.getMethod() == Method.HEAD;
+        boolean first = episodeRequests == 0;
+        File file = first ? initialEpisode : reconnectedEpisode;
+        String range = session.getHeaders().get("range");
+        long start = range == null ? 0 : Long.parseLong(StringUtils.substringBetween(range, "=", "-"));
+        String rangeEnd = range == null ? "" : StringUtils.substringAfter(range, "-");
+        long end = rangeEnd.isEmpty() ? file.length() - 1 : Math.min(Long.parseLong(rangeEnd), file.length() - 1);
+        if (start < 0 || start > end) {
+            Response response = getRangeNotSatisfiable();
+            response.addHeader("Content-Range", "bytes */" + file.length());
+            return response;
+        }
+        int length = (int) (end - start + 1);
+        int sentLength = first && !head ? Math.min(length, disconnectByte) : length;
+        byte[] bytes = new byte[sentLength];
+        try (InputStream input = new FileInputStream(file)) {
+            IOUtils.skipFully(input, start);
+            IOUtils.readFully(input, bytes);
+        }
+        if (!head) {
+            episodeRequests++;
+            if (!first) {
+                resumedByte = start;
+            }
+        }
+        Log.i(TAG, "dynamic-ad method=" + session.getMethod() + " range=" + range
+                + " variant=" + (first ? "A" : "B") + " file=" + file.getName()
+                + " sent=" + sentLength + " advertised=" + length);
+        Response response = new Response(range == null ? Response.Status.OK : Response.Status.PARTIAL_CONTENT,
+                "audio/mpeg", new ByteArrayInputStream(bytes));
+        response.addHeader("Content-Length", String.valueOf(length));
+        response.addHeader("Accept-Ranges", "bytes");
+        response.addHeader("Connection", "close");
+        if (range != null) {
+            response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + file.length());
+        }
+        return response;
+    }
 
     public HTTPBin() {
         super(0); // Let system pick a free port
@@ -97,6 +154,15 @@ public class HTTPBin extends NanoHTTPD {
         final String func = segments[1];
         final String param = segments[2];
         final Map<String, String> headers = session.getHeaders();
+
+        if (func.equals("dynamic-ad") && initialEpisode != null) {
+            try {
+                return getDynamicAdResponse(session);
+            } catch (IOException | NumberFormatException e) {
+                Log.e(TAG, "Dynamic ad response failed", e);
+                return getInternalError();
+            }
+        }
 
         if (func.equalsIgnoreCase("status")) {
             try {
