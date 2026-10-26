@@ -82,7 +82,8 @@ def staged(opener, redirects, url, published, output, args):
 
     def request(target, method="GET", byte_range=None):
         redirects.observations.clear()
-        headers = {"Accept-Encoding": "identity"}
+        headers = {"Accept-Encoding": "identity", "User-Agent":
+                   next(value for name, value in opener.addheaders if name.lower() == "user-agent")}
         if method == "GET":
             headers["Icy-MetaData"] = "1"
         if byte_range:
@@ -95,7 +96,10 @@ def staged(opener, redirects, url, published, output, args):
         except urllib.error.HTTPError as error:
             record["status"] = error.code
             record["headers"] = {name: error.headers.get(name) for name in HEADERS}
-            raise
+            record["final_route"] = route(error.url)
+            if method != "HEAD" or not 400 <= error.code <= 599:
+                raise
+            response = error
         finally:
             record["redirects"] = list(redirects.observations)
         record.update(status=response.status, final_route=route(response.url),
@@ -142,8 +146,6 @@ def staged(opener, redirects, url, published, output, args):
 
     try:
         with request(url, "HEAD")[0] as response:
-            if response.status != 200:
-                raise ValueError("HEAD resolution did not return 200; staged capture unsupported.")
             pinned = response.url
         response, first = request(pinned)
         with response:

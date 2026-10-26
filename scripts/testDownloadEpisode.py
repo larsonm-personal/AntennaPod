@@ -33,12 +33,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if self.path == "/entry":
             self.redirect("/pinned?secret=PRIVATE")
             return
-        self.send_response(403 if mode == "head403" else 200)
+        self.send_response(403 if mode in ("head403", "head403get403") else 200)
         self.send_header("Content-Length", "999")
         self.end_headers()
 
     def do_GET(self):
         self.record()
+        assert self.headers.get("User-Agent") == "Python-urllib/" + capture.urllib.request.__version__
+        if mode == "head403get403":
+            self.send_response(403)
+            self.end_headers()
+            return
         requested_range = self.headers.get("Range")
         if not requested_range and self.path.startswith("/pinned"):
             self.redirect("/get-target?secret=PRIVATE")
@@ -83,14 +88,24 @@ def run_case(directory, server):
     data = json.loads((folder / "manifest.json").read_text())
     assert "PRIVATE" not in json.dumps(data) + log.getvalue()
     assert [request[0] for request in requests[:2]] == ["HEAD", "HEAD"], requests
-    if mode != "head403":
+    assert all(record["request_headers"]["User-Agent"] == "Python-urllib/" + capture.urllib.request.__version__
+               for record in data["requests"])
+    if mode in ("head403", "head403get403"):
+        assert data["requests"][0]["status"] == 403
+        assert data["requests"][0]["final_route"] == data["requests"][1]["requested_route"]
+    if mode == "head403get403":
+        assert len(requests) == 3 and requests[2][0] == "GET"
+        assert requests[2][1] == requests[1][1]
+        assert data["requests"][1]["status"] == 403
+        assert not (folder / "prefix.bin").exists()
+    else:
         assert requests[2][1].startswith("/pinned") and requests[3][1].startswith("/get-target")
         assert requests[4][1].startswith("/pinned") and requests[4][2] == "bytes=8-15"
         assert requests[4][3] is None
         assert (folder / "prefix.bin").read_bytes() == original[:8]
-    if mode in ("stable", "changed", "shorter", "third_overlap"):
+    if mode in ("stable", "changed", "shorter", "third_overlap", "head403"):
         assert code == 0, log.getvalue()
-        tail = original[8:] if mode in ("stable", "third_overlap") else changed[8:12 if mode == "shorter" else 16]
+        tail = original[8:] if mode in ("stable", "third_overlap", "head403") else changed[8:12 if mode == "shorter" else 16]
         assert (folder / "reconstructed.mp3").read_bytes() == original[:8] + tail
         if mode == "changed":
             assert data["overlap"]["matches_prefix"] is False
@@ -116,7 +131,7 @@ if __name__ == "__main__":
     try:
         with tempfile.TemporaryDirectory() as directory:
             for mode in ("stable", "changed", "shorter", "ignored", "wrong", "truncated", "416",
-                         "head403", "third_overlap"):
+                         "head403", "head403get403", "third_overlap"):
                 run_case(directory, server)
     finally:
         server.shutdown()

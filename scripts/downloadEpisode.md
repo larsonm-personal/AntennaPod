@@ -34,10 +34,10 @@ unverified because cloud access was blocked. The script does not impersonate Ant
 ## Staged capture (opt-in)
 
 ```powershell
-py -3 scripts/downloadEpisode.py --staged --delay 60 --overlap
+py -3 scripts/downloadEpisode.py --staged --delay 60 --overlap --output "$HOME/Downloads/antennapod-europe-staged-2.mp3"
 ```
 
-This saves a private `Downloads\antennapod-europe-staged.mp3.capture` directory.
+This saves a private `Downloads\antennapod-europe-staged-2.mp3.capture` directory.
 It resolves the RSS enclosure with HEAD (preserving HEAD through redirects), starts
 one full GET at that HEAD-resolved URL, saves exactly 1 MiB, closes it, waits, and
 requests `bytes=1048576-(initial GET length - 1)` from the same pinned URL.
@@ -49,7 +49,15 @@ ad rotation. Request identity stays constant; no proxy or identity changes are m
 The budget is one feed fetch, one HEAD resolution, two audio GETs, and, only with
 `--overlap`, one diagnostic range spanning at most 128 KiB around the join, plus
 normal redirects. Each body is capped at 256 MiB; the diagnostic body has its own
-128 KiB cap. HEAD errors or an initial GET without a usable length stop the run.
+128 KiB cap. Like AntennaPod, a HEAD HTTP error response still supplies the final
+redirected URL for the initial GET; its status and redirects remain in the manifest.
+A GET HTTP error remains terminal. Network/transport failures and unresolved redirect
+errors stop this tool; it does not model AntennaPod's IOException fallback to the
+original URL. An initial GET without a usable length also stops the run.
+The effective urllib User-Agent is recorded for each staged request and is unchanged.
+AntennaPod uses `AntennaPod/<installed version>` instead; this is a client identity
+difference, not evidence explaining a rejection. The new output name preserves
+previous captures; an existing directory still stops the run before requests.
 
 `prefix.bin`, `suffix.bin`, response hashes/headers and `manifest.json` are retained,
 including partial evidence on failure. A coherent 206 permits `reconstructed.mp3`,
