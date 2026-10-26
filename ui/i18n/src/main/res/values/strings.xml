@@ -1068,7 +1068,7 @@
     <string name="app_name_diagnostics">AntennaPod Diagnostics</string>
     <string name="playback_trace_start">Start private playback trace</string>
     <string name="playback_trace_stop">Stop private playback trace</string>
-    <string name="playback_trace_instructions">Paste the exact subscribed feed URL or episode audio URL. It stays on this device until you share detailed logs, which include request URLs and delivery headers. Start playback after enabling the trace. Only matching audio is traced; starting again clears the previous trace. Export before closing the app. This export contains numeric diagnostics, not audio or URLs.</string>
+    <string name="playback_trace_instructions">Paste the exact subscribed feed URL or episode audio URL. It stays on this device until you share detailed logs, which include request URLs and delivery headers. Start playback after enabling the trace. Only matching audio is traced. Export detailed logs soon after hearing a skip. Logs stay on your device until you share them.</string>
     <string name="playback_trace_started">Trace started. Now play the target episode.</string>
     <string name="playback_trace_invalid">Enter an HTTP or HTTPS feed or audio URL.</string>
 </resources>

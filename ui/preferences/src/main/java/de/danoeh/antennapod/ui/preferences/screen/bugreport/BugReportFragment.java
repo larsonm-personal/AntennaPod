@@ -11,6 +11,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import android.widget.EditText;
 import android.text.InputType;
+import android.text.method.PasswordTransformationMethod;
 import android.os.Build;
 import de.danoeh.antennapod.net.common.PlaybackTrace;
 import de.danoeh.antennapod.ui.preferences.BuildConfig;
@@ -183,6 +184,7 @@ public class BugReportFragment extends AnimatedFragment {
         EditText input = new EditText(requireContext());
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         input.setSingleLine(true);
+        input.setTransformationMethod(PasswordTransformationMethod.getInstance());
         input.setSaveEnabled(false);
         if (Build.VERSION.SDK_INT >= 26) {
             input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
