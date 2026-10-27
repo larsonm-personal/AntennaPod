@@ -481,3 +481,31 @@ output-discard checks passed. Raw runs remain in the local validation directory 
 `measured-audio`, `measured-server`, `measured-review-service` and
 `measured-review-mixed`; earlier service failures are retained separately. No PR #8441
 code has been inspected, and this remains a review candidate rather than a frozen test.
+
+### CI diagnostics
+
+Review head `1f02ad4d578f5e93e9057da9dfeecc129291b5c7` retains logcat, Gradle output,
+exit status and report snapshots for every emulator attempt. Failed-attempt excerpts
+contain the last 60 relevant lines, with a shared 200-line diagnostic budget for the
+whole job. Existing Gradle output is not filtered. Retry success still succeeds;
+three failures return the last test status, independently of logcat capture status.
+Artifacts are named `test-report-api-<API>-<debug|release>` and uploaded even after a
+successful retry. The excerpt identifies `ci-emulator/attempt-N/` inside that artifact.
+Downloads are in the workflow run's Artifacts section and require GitHub sign-in.
+
+The emulator job explicitly installs/checks Python 3, FFmpeg and libmp3lame before
+instrumentation assembly. A dry-run task-graph check confirmed that app lint does not
+invoke fixture generation. Shell fixtures passed truncation, failed-then-successful
+retries, missing and empty adb output, per-attempt report preservation, debug/release
+commands and exact exit-status checks. Bash syntax and workflow YAML/wiring checks
+passed. Debug/instrumentation builds and focused Checkstyle also passed.
+
+The database test barrier now uses FutureTask rather than CompletableFuture, because
+the project targets API 23 without core-library desugaring. Its bounded wait and the
+exact rewind assertion are unchanged. The targeted API 30 service restart rerun passed;
+this does not claim a local API 23 emulator run.
+
+After publication, PR #1 pointed to the new head, but GitHub returned zero associated
+workflow runs, status checks and check runs. The cause is unverified; no Actions setting,
+permission or external service was changed. Hosted CI execution and artifact download
+behavior therefore remain unverified, despite the local runner and build checks.

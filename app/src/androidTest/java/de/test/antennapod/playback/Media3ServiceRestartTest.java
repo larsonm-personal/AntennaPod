@@ -43,7 +43,7 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -211,7 +211,13 @@ public class Media3ServiceRestartTest {
                 () -> manager.getRunningServices(Integer.MAX_VALUE).stream()
                         .noneMatch(info -> service.equals(info.service)));
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        CompletableFuture.runAsync(DBWriter::tearDownTests).get(5, TimeUnit.SECONDS);
+        FutureTask<Void> databaseIdle = new FutureTask<>(DBWriter::tearDownTests, null);
+        new Thread(databaseIdle, "TestDatabaseBarrier").start();
+        try {
+            databaseIdle.get(5, TimeUnit.SECONDS);
+        } finally {
+            databaseIdle.cancel(true);
+        }
     }
 
     private void deleteCache() {

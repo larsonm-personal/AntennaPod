@@ -71,3 +71,10 @@ Use `Media3ServiceRestartTest` or `ResolvedEpisodeServerTest` in the same runner
 command for the lifecycle and HTTP checks. The baseline mixed-representation case
 should fail at its content assertion. Setup, coverage, clock or cleanup failures
 are not successful reproductions. The test is not yet frozen for patch evaluation.
+
+CI prints at most 200 added diagnostic lines per emulator job, with API/build labels
+and the artifact name beside each attempt's excerpt. Full logcat, Gradle output and
+report snapshots are retained under `ci-emulator/attempt-N/` in
+`test-report-api-<API>-<debug|release>`, including failed attempts followed by success.
+Find it under the workflow run's **Artifacts** section; downloads require GitHub sign-in.
+The existing three-attempt retry policy remains; persistent content failures fail CI.
