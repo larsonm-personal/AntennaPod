@@ -34,6 +34,18 @@ assert align.correlate(signal, [rng.uniform(1, 8) for unused in range(50)])['sta
 assert align.correlate(signal + signal, signal[100:150])['status'] != 'candidate local match'
 assert 'little variation' in align.correlate(signal, [1] * 50)['status']
 print('PASS: envelope matches, nonmatch, repeated ambiguity and constant signal')
+short = signal[123:150]
+result = align.correlate(signal, short)
+assert result['status'] == 'candidate local match'
+assert result['compared_seconds'] == 1.7 and result['a_seconds_for_sample_after_edge_trim'] == 12.8
+assert result['minimum_correlation'] == 0.95 and result['minimum_margin'] == 0.15
+assert result['short_fragment']
+assert align.correlate(signal + signal, short)['status'] != 'candidate local match'
+assert align.correlate(signal, [rng.uniform(1, 8) for unused in range(27)])['status'] != 'candidate local match'
+assert '1.5 seconds' in align.correlate(signal, short[:24])['status']
+assert 'little variation' in align.correlate(signal, [1] * 27)['status']
+print('PASS: actual-length 27-bin fragment searched, with stricter score/margin and ambiguity rejection')
+
 
 with tempfile.TemporaryDirectory() as directory:
     folder = pathlib.Path(directory)
@@ -89,5 +101,14 @@ with tempfile.TemporaryDirectory() as directory:
         assert match['status'] == 'candidate local match', match
         assert abs(match['a_seconds_for_sample_after_edge_trim'] - (real_frames[201][1] + 0.5)) < 0.2
         print('PASS: real MP3 fragment with incomplete edges decodes and locates A within 200 ms')
+        fragment.write_bytes(data[real_frames[200][0] + 37:real_frames[304][0] + 19])
+        part, fragment_diagnostic = align.envelope(fragment)
+        assert len(part) == 27, len(part)
+        match = align.correlate(whole, part)
+        assert match['compared_seconds'] == 1.7
+        assert match['minimum_correlation'] == 0.95 and match['minimum_margin'] == 0.15
+        if match['status'] == 'candidate local match':
+            assert abs(match['a_seconds_for_sample_after_edge_trim'] - (real_frames[201][1] + 0.5)) < 0.2
+        print('PASS: real 2.7-second MP3 fragment reaches short-fragment search: ' + match['status'])
     else:
         print('SKIPPED: real MP3 fragment check requires FFmpeg')

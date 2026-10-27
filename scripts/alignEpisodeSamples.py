@@ -113,8 +113,10 @@ def envelope(path):
 def correlate(reference, sample):
     sample = sample[5:-5]
     count = len(sample)
-    if count < 20 or len(reference) < count:
-        return {'status': 'not measured: less than two seconds after edge exclusion'}
+    if count < 15:
+        return {'status': 'not measured: less than 1.5 seconds after edge exclusion'}
+    if len(reference) < count:
+        return {'status': 'not measured: reference shorter than trimmed sample'}
     mean = sum(sample) / count
     centered = [value - mean for value in sample]
     energy = sum(value * value for value in centered)
@@ -136,11 +138,13 @@ def correlate(reference, sample):
     best = candidates[0]
     runner = next((item for item in candidates if abs(item[1] - best[1]) >= count), None)
     margin = best[0] - runner[0] if runner else None
-    plausible = best[0] >= 0.90 and (margin is None or margin >= 0.10)
+    minimum_score, minimum_margin = (0.95, 0.15) if count < 20 else (0.90, 0.10)
+    plausible = best[0] >= minimum_score and (margin is None or margin >= minimum_margin)
     return {'status': 'candidate local match' if plausible else 'ambiguous or no strong local match',
             'a_seconds_for_sample_after_edge_trim': best[1] / 10,
             'excluded_sample_edge_seconds': 0.5, 'compared_seconds': count / 10,
-            'correlation': best[0], 'distinct_runner_up_correlation': runner[0] if runner else None,
+            'minimum_correlation': minimum_score, 'minimum_margin': minimum_margin,
+            'short_fragment': count < 20, 'correlation': best[0], 'distinct_runner_up_correlation': runner[0] if runner else None,
             'margin': margin, 'meaning': '100 ms log-RMS envelope search; heuristic, confirm by listening; '
             'not a probability or a B timestamp; unknown decoder lead-in may shift the estimate'}
 

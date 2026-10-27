@@ -265,8 +265,12 @@ The first sample is excluded because it may contain metadata rather than audio.
 Without `--decode`, only Python 3.9 or newer is required. With it, local FFmpeg is
 optional and explicitly reported if missing. The helper decodes mono audio locally,
 excludes half a second at each fragment edge, and searches A's 100 ms log-RMS envelope.
-A candidate needs correlation of at least 0.90 and a margin of at least 0.10 over a
-nonoverlapping alternative. These are heuristic scores, not confidence probabilities.
+At least 1.5 seconds must remain after trimming. A 2.7-second fragment therefore
+contributes 1.7 seconds, rather than being rejected without a search. For fragments
+with less than two seconds remaining, a candidate needs correlation of at least 0.95
+and a margin of at least 0.15 over a nonoverlapping alternative; longer fragments
+require 0.90 and 0.10 respectively. These are conservative screening heuristics,
+not calibrated confidence probabilities. Short matches are especially provisional.
 Listen to candidate passages to confirm them, especially if fragment decoding reports
 errors. Repeated music, silence, short excerpts or changed encoding can make the result
 ambiguous. Decoder lead-in and the 100 ms grid limit timing precision. Full-A decoder
