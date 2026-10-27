@@ -14,10 +14,11 @@ fi
 if [ "${ADB_MODE:-normal}" = empty ]; then
     exit 0
 fi
-if [ "$2" = -d ]; then
+if [ "$2" = -b ]; then
     for line in {1..400}; do
         echo "I ResolvedUrlPlaybackTest: boundary=95 A-before=33 B-after=14 marker-${line}"
     done
+    echo "E TestRunner: java.lang.NoSuchMethodError: missing playback API"
 fi
 ADB
 cat > "$temporary/gradlew" <<'GRADLE'
@@ -30,6 +31,7 @@ read -r -a statuses <<< "$TEST_STATUSES"
 mkdir -p app/build/reports/androidTests
 printf 'report from attempt %s\n' "$attempt" > app/build/reports/androidTests/index.html
 printf '%s\n' "$*" >> arguments.txt
+sleep 0.1
 echo 'GRADLE: output retained without filtering'
 exit "${statuses[$((attempt - 1))]}"
 GRADLE
@@ -61,14 +63,15 @@ runCase failed_then_passed '7 0' 0 normal debug
 grep -qx 7 "$temporary/failed_then_passed/app/build/ci-emulator/attempt-1/status.txt"
 grep -qx 0 "$temporary/failed_then_passed/app/build/ci-emulator/attempt-2/status.txt"
 grep -q 'report from attempt 2' "$temporary/failed_then_passed/app/build/ci-emulator/attempt-2/reports/index.html"
-test "$(wc -l < "$temporary/failed_then_passed/app/build/ci-emulator/attempt-1/logcat.txt")" -eq 400
+test "$(wc -l < "$temporary/failed_then_passed/app/build/ci-emulator/attempt-1/logcat.txt")" -eq 401
 grep -q '  I ResolvedUrlPlaybackTest:.*marker-400' "$temporary/failed_then_passed/output.txt"
+grep -q '  E TestRunner: java.lang.NoSuchMethodError' "$temporary/failed_then_passed/output.txt"
 ! grep -q '  I ResolvedUrlPlaybackTest:.*marker-340$' "$temporary/failed_then_passed/output.txt"
 grep -q 'connectedPlayDebugAndroidTest connectedDebugAndroidTest' "$temporary/failed_then_passed/arguments.txt"
 
 runCase all_failed '7 9 11' 11 normal release
 test "$(cat "$temporary/all_failed/count")" -eq 3
-test "$(grep -c '^  I ResolvedUrlPlaybackTest:' "$temporary/all_failed/output.txt")" -eq 180
+test "$(grep -c '^  ' "$temporary/all_failed/output.txt")" -eq 180
 grep -q 'connectedPlayReleaseAndroidTest' "$temporary/all_failed/arguments.txt"
 
 runCase missing_adb '4 5 6' 6 missing debug

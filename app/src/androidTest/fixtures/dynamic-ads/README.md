@@ -40,6 +40,9 @@ and playback resumption. It waits for main-thread shutdown and pending database
 writes before reading the saved position. Routing is logged. It does not observe consumed service
 audio or simulate process death or a Wi-Fi/cellular handoff. The short-pause check
 requires the production 800 ms rewind within its documented time interval.
+The position listener is a proxy over the public `Player.Listener` interface: a
+separately compiled listener otherwise calls default-method companions removed
+from the optimized release APK.
 
 The measured B was 1,441,331 bytes shorter. At two sampled interior locations, three
 unique encoded blocks each matched A exactly 1,441,331 bytes later, or 2,299 frames
@@ -78,3 +81,8 @@ report snapshots are retained under `ci-emulator/attempt-N/` in
 `test-report-api-<API>-<debug|release>`, including failed attempts followed by success.
 Find it under the workflow run's **Artifacts** section; downloads require GitHub sign-in.
 The existing three-attempt retry policy remains; persistent content failures fail CI.
+Matrix jobs finish independently so one failure does not cancel the other devices.
+Logcat is captured throughout each attempt, before instrumentation can clear its buffers.
+Release instrumentation builds (`-PtestBuildType=release`) retain the Media3 APIs
+used only by the tests via `app/src/androidTest/proguard.cfg`; ordinary release
+builds do not load those rules.

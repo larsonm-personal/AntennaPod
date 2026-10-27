@@ -8,7 +8,6 @@ import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.OptIn;
-import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.database.StandaloneDatabaseProvider;
@@ -40,6 +39,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -126,10 +126,10 @@ public class Media3ServiceRestartTest {
         stopService();
         Log.i("Media3ServiceRestartTest", "pausedControllerPosition=" + position
                 + " savedAfterShutdown=" + DBReader.getFeedMedia(media.getId()).getPosition());
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
-                () -> DBReader.getFeedMedia(media.getId()).getPosition() >= 17000);
         FeedMedia saved = DBReader.getFeedMedia(media.getId());
         final int savedPosition = saved.getPosition();
+        assertTrue("Saved position must permit the full short-pause rewind",
+                savedPosition > RewindAfterPauseUtils.MINIMUM_REWIND);
         final long pausedAt = saved.getLastPlayedTimeStatistics();
         assertTrue("Missing pause timestamp", pausedAt > 0);
         server.resumeResponses();
@@ -137,13 +137,23 @@ public class Media3ServiceRestartTest {
         connect();
         onMain(() -> {
             assertEquals(0, controller.getMediaItemCount());
-            controller.addListener(new Player.Listener() {
-                @Override
-                public void onMediaItemTransition(MediaItem item, int reason) {
-                    restoredPosition = controller.getCurrentPosition();
-                    restoredAt = System.currentTimeMillis();
-                }
-            });
+            controller.addListener((Player.Listener) Proxy.newProxyInstance(Player.Listener.class.getClassLoader(),
+                    new Class<?>[] {Player.Listener.class}, (listener, method, arguments) -> {
+                        switch (method.getName()) {
+                            case "onMediaItemTransition":
+                                restoredPosition = controller.getCurrentPosition();
+                                restoredAt = System.currentTimeMillis();
+                                return null;
+                            case "hashCode":
+                                return System.identityHashCode(listener);
+                            case "equals":
+                                return listener == arguments[0];
+                            case "toString":
+                                return "RestartPositionListener";
+                            default:
+                                return null;
+                        }
+                    }));
             controller.play();
         });
         awaitPosition(savedPosition + 3000);

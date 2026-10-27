@@ -41,6 +41,9 @@ android {
             shrinkResources true
             signingConfig signingConfigs.releaseConfig
             testProguardFiles "proguard-test.cfg"
+            if (project.findProperty("testBuildType") == "release") {
+                proguardFiles "src/androidTest/proguard.cfg"
+            }
         }
     }
 

@@ -520,3 +520,51 @@ unrelated host-side PlainTextLinksConverterTest; those were left unchanged. The 
 are retained locally as api23-lint.xml and api23-rich-lint.xml. The focused API 30
 service restart test passed again in 90.703 seconds, with the exact rewind assertion.
 No API 23 device execution, Actions settings change or workflow dispatch is claimed.
+
+### First hosted CI run and release harness corrections
+
+[Run 40587919408](https://github.com/larsonm-personal/AntennaPod/actions/runs/40587919408)
+on review head `edf3ee8ebf1f3b33b6696a366593f9886d9acc2e` passed static analysis,
+wrapper validation and all unit/build jobs. Debug API 23, 30 and 36 reached the
+mixed-representation assertion (A-before=30, B-after=9, about 60.056 seconds error).
+The release API 36 job finished first and canceled the other matrix jobs through
+fail-fast. Its only failed cases, in each of three attempts, were both service
+tests (`SimpleCache.delete` removed) and playback-test initialization (missing
+`PcmOutput` superclass). These are harness linkage failures, not reproductions.
+
+Release instrumentation now loads separate retention rules for the public Media3
+APIs used by the tests. Ordinary release builds do not load these rules. Local
+checks also exposed removed `MediaItem.fromUri`, `MediaController.Builder` methods
+and the `Player.Listener` default-method companion. Keeping the listener interface
+does not retain that generated companion; an isolated R8 fixture confirmed this.
+The test uses a public-interface proxy for the same transition callback, leaving
+the play/resumption sequence and exact position assertion unchanged.
+No content assertion or timeout was relaxed. Matrix fail-fast is disabled so one
+failure does not cancel evidence from the remaining devices.
+
+The first API-36 release job emitted 86 added diagnostic lines. Its uploaded
+`test-report-api-36-release` artifact contains all three attempts' statuses,
+Gradle logs, logcat, diagnostics and reports, independently verified through the
+GitHub connector. The executor's archive download received HTTP 403, although job
+logs were accessible. API-23's post-run logcat had lost playback messages, so the
+runner now captures all buffers throughout each attempt and includes linkage
+errors in its bounded excerpt. Shell checks cover streaming capture, truncation,
+linkage errors, failed-then-passing retries, missing/empty adb output and exit status.
+
+Local release audio checks passed stable A, empty-cache B and completed-download
+controls; the mixed case alone failed `assertConsumedContent` with A-before=32,
+B-after=10, maxErrorA=60.0566985 and maxErrorB=60.0547047. The measured boundary was
+2,293,342 bytes / 95.5559184 seconds. Setup, consumption and discard guards passed.
+
+A separate service setup failure exposed an invalid wait after shutdown: the
+controller reported 17.112 seconds while the final saved position was 16.960 seconds.
+The database barrier had completed, so waiting for that saved value to increase to
+17 seconds could never succeed. The test now reads the finalized position directly
+and requires it to exceed the production 800 ms rewind, avoiding a zero-clamped
+resume. It still requires the exact saved-minus-800 restored position and the
+production short-pause interval. The initial controller playback threshold is unchanged.
+
+With the proxy and finalized-position setup, both local release service tests passed
+(81.38 seconds). Saved position 17,489 ms restored at 16,689 ms, exactly 800 ms back;
+pause/resume also passed. Build, focused Checkstyle and shell regression checks passed.
+Hosted requalification is still required; the prior canceled matrix is not a pass.
