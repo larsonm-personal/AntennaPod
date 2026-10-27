@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import android.util.Log;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import okhttp3.Interceptor;
 import okhttp3.Response;
 import java.io.IOException;
@@ -19,11 +20,16 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.util.IdentityHashMap;
+import java.util.Collections;
 
 public final class PlaybackTrace {
     public enum Event { START, STOP, SOURCE, HEAD, HEAD_FAILURE, RESOLVE, OPEN, RESPONSE, RANGE,
         READ, INPUT, CLOSE, FAILURE, CACHE, CACHE_IGNORED, POSITION, DISCONTINUITY, STATE, PLAYER_ERROR }
 
+    private static final ThreadLocal<HttpRequest> httpRequest = new ThreadLocal<>();
     private static final Set<Long> sources = new HashSet<>();
     private static byte[] salt = new byte[32];
     private static File directory;
@@ -36,6 +42,46 @@ public final class PlaybackTrace {
     private static boolean active;
 
     private PlaybackTrace() {
+    }
+
+    public static final class HttpRequest {
+        public final long request;
+        public final String source;
+        private final Map<Object, Integer> hops = new IdentityHashMap<>();
+        private final Set<Object> responses = Collections.newSetFromMap(new IdentityHashMap<>());
+
+        private HttpRequest(long request, String source) {
+            this.request = request;
+            this.source = source;
+        }
+
+        public int hop(Object connection) {
+            return hops.computeIfAbsent(connection, ignored -> hops.size() + 1);
+        }
+
+        public boolean firstResponse(Object connection) {
+            return responses.add(connection);
+        }
+    }
+
+    public static void beginHttpRequest(long request, String source) {
+        if (matches(source)) {
+            httpRequest.set(new HttpRequest(request, source));
+        }
+    }
+
+    public static void endHttpRequest() {
+        httpRequest.remove();
+    }
+
+    public static HttpRequest currentHttpRequest() {
+        return httpRequest.get();
+    }
+
+    public static void headerValues(String prefix, String name, List<String> values) {
+        detail(prefix + name, "Authorization".equalsIgnoreCase(name) || "Proxy-Authorization".equalsIgnoreCase(name)
+                || "Cookie".equalsIgnoreCase(name) || "Set-Cookie".equalsIgnoreCase(name)
+                ? "[present]" : new JSONArray(values).toString());
     }
 
     public static final class HeadRequest {
@@ -56,16 +102,13 @@ public final class PlaybackTrace {
         detail("head." + request + ".url", chain.request().url().toString());
         detail("head." + request + ".method", chain.request().method());
         for (String name : chain.request().headers().names()) {
-            detail("head." + request + ".request." + name,
-                    name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie")
-                            ? "[present]" : chain.request().header(name));
+            headerValues("head." + request + ".request.", name, chain.request().headers().values(name));
         }
         try {
             Response response = chain.proceed(chain.request());
             record(Event.HEAD, request, identity(response.request().url().toString()), response.code());
             for (String name : response.headers().names()) {
-                detail("head." + request + ".response." + name,
-                        name.equalsIgnoreCase("Set-Cookie") ? "[present]" : response.header(name));
+                headerValues("head." + request + ".response.", name, response.headers().values(name));
             }
             return response;
         } catch (IOException error) {

@@ -1,0 +1,21 @@
+plugins {
+    id 'java'
+}
+repositories {
+    google()
+    mavenCentral()
+}
+configurations {
+    media3Fixture
+}
+dependencies {
+    implementation('com.android.tools.build:gradle-api:9.0.1') { exclude group: 'com.android.tools.build', module: 'gradle' }
+    implementation 'org.ow2.asm:asm:9.8'
+    implementation 'org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.3.20'
+    testImplementation 'junit:junit:4.13.2'
+    media3Fixture 'androidx.media3:media3-datasource:1.10.0@aar'
+}
+test {
+    inputs.files(configurations.media3Fixture)
+    systemProperty 'media3.fixture', configurations.media3Fixture.singleFile.absolutePath
+}

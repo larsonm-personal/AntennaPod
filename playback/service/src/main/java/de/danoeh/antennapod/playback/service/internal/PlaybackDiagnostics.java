@@ -79,7 +79,8 @@ final class PlaybackDiagnostics implements DataSource {
             for (Map.Entry<String, String> header : spec.httpRequestHeaders.entrySet()) {
                 String name = header.getKey();
                 PlaybackTrace.detail("get." + request + ".dataSpecHeader." + name,
-                        name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie")
+                        name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Proxy-Authorization")
+                                || name.equalsIgnoreCase("Cookie")
                                 ? "[present]" : header.getValue());
             }
             PlaybackTrace.detail("get." + request + ".User-Agent", UserAgentInterceptor.USER_AGENT);
@@ -96,6 +97,7 @@ final class PlaybackDiagnostics implements DataSource {
             }
             PlaybackTrace.detail("get." + request + ".authorizationPresent", Boolean.toString(authorizationPresent));
         }
+        PlaybackTrace.beginHttpRequest(request, source);
         try {
             long length = upstream.open(spec);
             record(PlaybackTrace.Event.INPUT, request, inputBytes, bytes);
@@ -105,9 +107,8 @@ final class PlaybackDiagnostics implements DataSource {
             if (PlaybackTrace.matches(source)) {
                 PlaybackTrace.detail("get." + request + ".finalUrl", String.valueOf(upstream.getUri()));
                 for (Map.Entry<String, List<String>> header : upstream.getResponseHeaders().entrySet()) {
-                    PlaybackTrace.detail("get." + request + ".response." + header.getKey(),
-                            "Set-Cookie".equalsIgnoreCase(header.getKey())
-                                    ? "[present]" : header.getValue().toString());
+                    PlaybackTrace.headerValues("get." + request + ".response.",
+                            header.getKey(), header.getValue());
                 }
             }
             String range = header("Content-Range");
@@ -137,13 +138,14 @@ final class PlaybackDiagnostics implements DataSource {
                             (HttpDataSource.InvalidResponseCodeException) error;
                     PlaybackTrace.detail("get." + request + ".errorResponseUrl", String.valueOf(upstream.getUri()));
                     for (Map.Entry<String, List<String>> header : response.headerFields.entrySet()) {
-                        PlaybackTrace.detail("get." + request + ".errorResponse." + header.getKey(),
-                                "Set-Cookie".equalsIgnoreCase(header.getKey())
-                                        ? "[present]" : header.getValue().toString());
+                        PlaybackTrace.headerValues("get." + request + ".errorResponse.",
+                                header.getKey(), header.getValue());
                     }
                 }
             }
             throw error;
+        } finally {
+            PlaybackTrace.endHttpRequest();
         }
     }
 

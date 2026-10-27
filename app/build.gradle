@@ -1,3 +1,6 @@
+import com.android.build.api.instrumentation.InstrumentationScope
+import com.android.build.api.instrumentation.FramesComputationMode
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.triplet.play) apply false
@@ -149,5 +152,37 @@ if (project.hasProperty("antennaPodPlayPublisherCredentials")) {
         releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.IN_PROGRESS)
         userFraction.set(0.01d)
         serviceAccountCredentials.set(file(antennaPodPlayPublisherCredentials))
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.instrumentation.transformClassesWith(Media3TraceVisitor,
+                InstrumentationScope.ALL) { }
+        variant.instrumentation.setAsmFramesComputationMode(FramesComputationMode.COPY_FRAMES)
+        def verify = tasks.register("verify${variant.name.capitalize()}DiagnosticMedia3") {
+            doLast {
+                def artifacts = configurations.getByName("${variant.name}RuntimeClasspath").incoming.artifactView {
+                    attributes.attribute(Attribute.of('artifactType', String), 'aar')
+                    componentFilter { id ->
+                        id instanceof ModuleComponentIdentifier && id.group == 'androidx.media3'
+                                && id.module == 'media3-datasource'
+                    }
+                }.artifacts.artifacts
+                if (artifacts.size() != 1) {
+                    throw new GradleException('Diagnostic Media3 artifact is missing or ambiguous')
+                }
+                def artifact = artifacts.first()
+                if (artifact.id.componentIdentifier.version != '1.10.0') {
+                    throw new GradleException('Diagnostic Media3 instrumentation requires version 1.10.0')
+                }
+                Media3TraceVisitor.verifyArchive(artifact.file)
+            }
+        }
+        tasks.configureEach {
+            if (name == "pre${variant.name.capitalize()}Build") {
+                dependsOn verify
+            }
+        }
     }
 }

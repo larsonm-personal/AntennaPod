@@ -24,9 +24,10 @@ activity, not a guaranteed number of days. Position events are recorded every fi
 seconds. At roughly 100 bytes per position event, these events alone use about
 1.7 MB per day of continuous playback (MB here means 1,048,576 bytes); requests,
 retries and state changes shorten that window. In the earlier local reconnect fixture,
-position lines averaged 77 bytes: about 150 hours for position lines alone. The entire
-request-heavy 46-second fixture would fill the limit in about 17 hours if that rate
-continued. Neither figure is a measured ordinary-listening retention window. This is
+position lines averaged about 78 bytes: about 150 hours for position lines alone.
+With per-hop logging, the latest 45.5-second reconnect playback fixture wrote 11,564
+bytes; that request-heavy rate would fill the limit in about 9 hours if sustained.
+Neither figure is a measured ordinary-listening retention window. This is
 a size bound, not a promise of a particular number of hours.
 Writes run on a bounded background queue; abrupt process termination can lose pending
 events, and storage/queue failures are reported to logcat. Individual lines above
@@ -55,8 +56,18 @@ correlate them. The trace includes:
   DataSpec headers are logged separately from generated headers that can override them.
   HTTP error responses retain status, response URL and headers; transport errors retain
   their exception class. Cookie and authorization values are not recorded.
-  GET request-header values are derived from the unchanged Media3 configuration;
-  intermediate GET redirects and platform-added headers/cookies are not intercepted.
+  The summary fields are derived from Media3 configuration; the per-hop observations
+  below record what each actual connection exposes before connecting.
+- `get.N.hop.H.*`: each connection attempted by the original Media3 redirect loop.
+  `url` is the actual next URL passed to the connection; `method`, `hasRequestBody`,
+  `automaticRedirects` and `configuredRequest.*` are read immediately before its
+  original connect call. `status`, `responseUrl` and `response.*` follow the original
+  response-code call. Raw Location and the next hop's absolute URL preserve relative
+  resolution/rewrites. Errors retain the hop and exception class. Header values are
+  JSON arrays, preserving duplicate values; credential values remain presence markers.
+  These are connection-API observations, not a wire capture: Android can add headers
+  such as Host, Content-Length, Connection or Cookie internally during connect, and
+  authentication/proxy/TLS internals are not observed. No connection is opened early.
 - `RESPONSE`: request number, status, open length, final URL identity, validator identities.
 - `RANGE`: request number, first byte, last byte, total; -1 means malformed/unsupported.
 - `INPUT`: request number, upstream input bytes during open, delivered bytes (zero).
@@ -86,12 +97,12 @@ release app's existing cache/session state.
 
 The logs support building a timed Python request sequence: original URL, HEAD
 resolution, resolved URL reuse, GET method/ranges, configured headers, delays,
-response validators and delivered byte counts. They do not yet document every GET
-redirect hop or platform-added request header. Media3 1.10.0 exposes no supported
-observer for its private connection/redirect loop. Those gaps can matter for a
-method-specific denial, cookie/session changes or different ad assignments; the
-trace must not be described as an exhaustive HTTP capture. The transport has not
-been replaced or given a new redirect policy to obtain logs.
+response validators and delivered byte counts. Debug-only instrumentation now records
+all connection attempts in Media3's redirect loop, including method/header changes
+visible to the implementation and HTTP error responses. Automatic platform redirects
+are disabled by the app's existing Media3 configuration; the logged flag confirms this.
+Platform-added headers and internal authentication/proxy exchanges remain outside this
+capture. Cookie and authorization values are deliberately not exported by these hooks.
 
 Cache reports give aggregate cached bytes and network request offsets, not a full
 byte-by-byte map of cache reads. Neither a smooth player clock nor a DISCONTINUITY
@@ -103,3 +114,30 @@ A later local Python run can try the observed sequence and capture new responses
 It cannot restore the provider's historical ad state, IP/session assignment, expired
 signed URLs, omitted credentials or the app's previous cache. No replay should be
 claimed equivalent merely because its request timestamps or lengths match.
+
+## Auditing the dependency instrumentation
+
+Only debug app variants apply the Android Gradle Plugin's ASM instrumentation to
+`androidx.media3.datasource.DefaultHttpDataSource`. Four existing virtual call sites
+(two `connect`, two `getResponseCode`) become static observers that invoke the original
+method exactly once. The redirect loop, URL resolution, status policy, body writes,
+header configuration, reads, skips and exceptions remain in the dependency. Observers
+are scoped by a thread-local playback request, so unrelated uses are not logged.
+The observer implementation lives only in `app/src/debug`; release variants do not
+register the transform. No global URL handler, replacement HTTP stack or reflection
+hook is installed.
+
+Pinned upstream: `androidx.media3:media3-datasource:1.10.0`, Apache-2.0,
+[DefaultHttpDataSource source](https://github.com/androidx/media/blob/1.10.0/libraries/datasource/src/main/java/androidx/media3/datasource/DefaultHttpDataSource.java).
+Published sources.jar entry SHA256: `8bc990dfdebb208b8b7b0b9ddfe6be885a6f83a162dac0d59c7b8f80910b882c`.
+Published AAR class SHA256: `046e9eaa9b6924eea1d0c635514c2999e1f8c7f2daf9cac01723a995512dc990`.
+Each debug pre-build checks the actual resolved dependency version and class hash.
+The transform rejects a changed call-site count. Its unit test reverses only the four
+substitutions and requires byte-for-byte equality with normalized original bytecode.
+This intentionally fails closed on dependency changes and requires re-auditing when
+Media3 changes. Build logic uses the project's AGP 9.0.1 and Kotlin API 2.3.20 versions.
+
+Run `./gradlew --console=plain :buildSrc:test` for the mechanical audit. The Android
+`PlaybackDiagnosticsTest` compares observation-disabled and enabled requests, response
+bytes and errors against the same local HTTPBin server, including POST-to-GET redirect
+handling and Range-to-200 skipping. This is not a live-provider reproduction.

@@ -7,6 +7,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.shadows.ShadowLog;
 
 import java.util.stream.Collectors;
+import java.util.Arrays;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
@@ -93,6 +94,19 @@ public class PlaybackTraceTest {
         }
         assertTrue(total <= 8 * 1024 * 1024);
         assertTrue(new String(Files.readAllBytes(rotated.toPath()), StandardCharsets.UTF_8).contains("sentinel"));
+    }
+
+    @Test
+    public void duplicateHeadersSurviveAndProxyCredentialsAreNotCaptured() {
+        PlaybackTrace.select("https://synthetic.invalid/headers", false);
+        PlaybackTrace.headerValues("fixture.", "X-Duplicate", Arrays.asList("first", "second"));
+        PlaybackTrace.headerValues("fixture.", "Proxy-Authorization", Arrays.asList("Basic SYNTHETIC_SECRET"));
+        assertFalse(logged().contains("SYNTHETIC_SECRET"));
+        if (BuildConfig.DEBUG) {
+            assertTrue(logged().contains("first"));
+            assertTrue(logged().contains("second"));
+            assertTrue(logged().contains("[present]"));
+        }
     }
 
     private String logged() {
