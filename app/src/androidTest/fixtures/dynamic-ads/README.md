@@ -1,56 +1,62 @@
-# Dynamic-ad reconnect demo
+# Playback across resolved URLs
 
-`DynamicAdPlaybackTest` uses the app's `ExoPlayerUtils.buildPlayer` networking,
-cache and playback configuration, with a forwarding wrapper around its real
-audio sink. It does not exercise the playback service UI or Bluetooth resume.
+`ResolvedEpisodeServer` starts with the original endpoint resolving to A, waits for
+an explicit signal from the test, then switches fresh resolutions to B. A and B keep
+their own bytes throughout. There is no rotation timer. Response throttling is a
+separate setup action: after 320,000 bytes, at most 1,024 bytes are sent per 200 ms.
+Releasing it continues the body, without a manufactured EOF.
 
-The fixtures contain the same continuous 120-second, 20–10000 Hz linear program
-sweep. A 1200 Hz ad is inserted at program second 5, lasting 2 or 6 seconds.
-`python3 generate.py` regenerates both mono 44.1 kHz, 128 kbit/s MP3s using FFmpeg
-with libmp3lame. No stepped tones or compressed-byte matching are used.
+The fixtures contain the same continuous frequency sweep, with a two-second ad in A
+and a six-second ad in B at program second five. The first player consumes 17 seconds
+of A and is cancelled normally. The test inspects the resulting disk spans, verifies
+their bytes against A, and walks MP3 frames to locate the actual cache boundary.
+When the partial cache covers the resume point, the observation spans that boundary.
+A missing or complete cache still permits coherent playback; the test does not require
+a particular caching strategy.
+Requests and ranges are evidence, not required implementation details.
 
-The HTTPBin dynamic-ad mode interrupts the initial response after 320000 bytes
-(about 20 seconds). The reconnect serves either the original file or the longer-ad
-variant at the same URL. HEAD does not advance the variant. Bounded byte ranges
-have matching Content-Length and Content-Range; the initial short body deliberately
-simulates a connection interruption. No validators are advertised.
+The content assertion accepts a coherent A or B representation. A-before/B-after
+windows expose the mixed baseline. The empty-cache comparison checks coherent B
+separately: its program position is about four seconds behind A at the restored
+media timestamp. That displacement alone does not prove cache mixing. Stable A and
+completed local downloads are controls.
 
-The test estimates frequency from decoded PCM accepted by the normal sink, then
-checks only windows behind its consumed position. Renderer-time offsets are removed;
-an intervening PCM flush fails the test. Playback is 1x with silence skipping off.
-The first second and original ad boundaries are excluded, with 250 ms content-time
-tolerance for codec delay and frequency estimation. The sweep's later crossing of
-the ad frequency is not excluded. This observes virtual audio consumption, not a
-microphone recording. It checks the first 27 seconds, not end-of-file truncation.
+The observer uses Media3's public audio-output message with the unchanged production
+player. It forwards to the normal AudioTrack output and reads only the bytes each
+write actually accepts, including partial writes. Zero crossings estimate the
+sweep frequency and therefore program position. Accepted frame counts plus the
+fixed seek start give media time at 1x speed; the real output-relative playback head
+filters out unconsumed windows. A flush, release or replacement after PCM invalidates
+the observation. Neither an internal renderer offset nor player-position logs form
+the audio oracle.
 
-Build with `./gradlew :app:assembleDebug` and
-`./gradlew :app:assemblePlayDebugAndroidTest -PtestBuildType=debug`, install the Play
-debug app and test APKs, then run:
+`Media3ServiceRestartTest` separately checks actual service teardown, saved position
+and playback resumption. Routing is logged. It does not observe consumed service
+audio or simulate process death or a Wi-Fi/cellular handoff. The short-pause check
+requires the production 800 ms rewind within its documented time interval.
 
-```sh
-adb shell am instrument -w -r -e class de.test.antennapod.playback.DynamicAdPlaybackTest de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
-adb logcat -d -s DynamicAdPlaybackTest:I HTTPBin:I
-```
+These are synthetic layout changes. The measured alternate file was shorter; its
+program alignment is still unknown. There is no production fix here.
 
-On API 30, the stable control passes (maximum error about 13 ms); the changed-ad
-continuity assertion fails (about 4.013 seconds repeated). The failing assertion is
-intentional in this demo branch. This demonstrates one simulated mechanism, not the
-proven cause of every reported skip. There is no playback bug fix in this change.
+## Build and run
 
-## Generating the fixtures
-
-Android instrumentation builds require Python 3 and FFmpeg with the libmp3lame
-encoder on PATH. They install neither tool. Ordinary app builds do not generate
-these fixtures. Set `-PfixturePython=python` (or an executable path) if Python 3
-is not named `python3` on your machine.
+Instrumentation builds require Python 3 and FFmpeg with libmp3lame on PATH; no tools
+are installed automatically. Use `-PfixturePython=python` or an executable path if
+Python 3 is not named `python3`. Ordinary app builds do not generate these fixtures.
+The generator was checked with Python 3.12.14 and FFmpeg 7.1.5: two clean generations
+produced identical bytes. Encoder versions may change the bytes. After changing
+tools, run `./gradlew :app:generatePlaybackFixtures --rerun-tasks`.
+MP3s are generated under the ignored `app/build/generated/playbackFixtures` directory.
 
 ```sh
 ./gradlew :app:assembleDebug
 ./gradlew :app:assemblePlayDebugAndroidTest
+adb install -r app/build/outputs/apk/play/debug/app-play-debug.apk
+adb install -r app/build/outputs/apk/androidTest/play/debug/app-play-debug-androidTest.apk
+adb shell am instrument -w -r -e class de.test.antennapod.playback.ResolvedUrlPlaybackTest de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
 ```
 
-The generator was checked with Python 3.12.14 and FFmpeg 7.1.5/libmp3lame. Two clean
-generations must produce identical bytes with the same tools; encoder versions
-may change the MP3 bytes. After changing tools, regenerate with
-`./gradlew :app:generatePlaybackFixtures --rerun-tasks`. Generated files belong
-only under the ignored build directory, never in Git.
+Use `Media3ServiceRestartTest` or `ResolvedEpisodeServerTest` in the same runner
+command for the lifecycle and HTTP checks. The baseline mixed-representation case
+should fail at its content assertion. Setup, coverage, clock or cleanup failures
+are not successful reproductions. The test is not yet frozen for patch evaluation.

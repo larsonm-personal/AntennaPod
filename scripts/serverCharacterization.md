@@ -340,3 +340,66 @@ instrumentation APK also rebuilt after the harness corrections.
 
 The review branch is for critique, not a frozen submission test. No final third
 branch or PR #8441 comparison has been created.
+
+### Review corrections: source-only fixtures and a representation oracle
+
+The MP3s are no longer tracked in either branch's current tree. Android test assets
+are generated from source through the Android variant API; app-only builds do not
+run the generator. A detached clean checkout of `5c473b5f803c991239b7d919b48ddd68e8e850f5`
+built its instrumentation APK and packaged the generated assets. Two generations
+with Python 3.12.14 and FFmpeg 7.1.5/libmp3lame were byte-identical to each other and
+the earlier fixtures. A missing-FFmpeg check failed before creating output. Older
+published history is preserved. The original forced-change demo remains documented
+in `app/src/androidTest/fixtures/dynamic-ads/legacy-reconnect.md`.
+
+The refined test uses unchanged production `buildPlayer(context)` and Media3 1.10's
+public audio-output message. ForwardingAudioOutput observes only accepted PCM bytes
+and the real output-relative playback head; the fixed seek start maps the single
+1x stream to media time. Flush, release and output recreation after PCM invalidate
+measurement. No reflection or renderer-offset constant is used. Against the prior
+absolute-A oracle, stable/download controls still passed and both changed-resolution
+cases still failed at content. The new overload is removed from the review branch;
+the research branch retains it for the older experiments.
+
+`ResolvedEpisodeServer` lays out A resolution, a test signal wait, then B resolution.
+Both resolved endpoints remain immutable. Flow control is separate: after 320,000
+bytes, up to 1,024 bytes per 200 ms until released. Release continues the full body;
+the client cancels its own first transfer. Independent HTTP tests verify 302 HEAD/GET
+resolution, immutable A/B bytes, ranges, EOF/416 and complete bodies after release.
+Those tests caught and corrected NanoHTTPD's 301 enum and the stream wrapper's missing
+`available()` implementation before playback results were used.
+
+The test reads actual cache spans, compares their bytes with A, and walks the tagless
+MP3 frames to measure the boundary. It records requests rather than requiring exact
+GET counts or a B range ending at A's length. A coherent A or B stream can satisfy
+the retained-cache test, without requiring a repair to translate timestamps.
+
+In the first revised run, cached A covered 418,377 bytes, ending at frame time
+26.148571 s. The failed content assertion had 35 A-matching windows before that
+boundary and nine B-matching windows after it. Errors against either whole layout
+exceeded four seconds. Stable A and completed download passed within 15 ms. The
+empty-cache B comparison passed within 65 ms of B, while retaining its approximately
+four-second displacement from A. All coverage and output-discard guards passed.
+
+Both service cases passed. Restart saved 17,410 ms and restored 16,610 ms: exactly
+the production 800 ms rewind, with an explicit less-than-one-minute pause condition.
+Service routing remains logged rather than prescribed. These checks do not observe
+consumed service audio, process death or network handoff. Cache deletion follows
+confirmed service shutdown; failed shutdown invalidates the run rather than permitting
+a new test to reuse an active cache. The live shorter-B alignment gap is unchanged,
+and no PR #8441 patch has been inspected or evaluated.
+
+Review snapshot `a2135d4ab7179952a22d895aeddb00e2ed0e9971` contains seven changed
+files: the test asset build task, fixture source/readme, and four instrumentation
+classes. It has no production Java or shared HTTPBin changes. Debug and
+instrumentation builds and focused Checkstyle passed; an app-only task-graph
+assertion confirmed that fixture generation was absent. The research instrumentation
+build and focused Checkstyle also passed. This remains a review snapshot, not a
+frozen test or a final submission branch.
+
+A repeat at that review head passed all three HTTP checks and again failed only
+the mixed-content assertion. This time the actual cached prefix was 440,111 bytes
+(frame boundary 27.506939 s), with 40 A-matching windows before and nine B-matching
+windows after; whole-layout errors were 4.007354 s against A and 4.014972 s against B.
+The changed boundary did not change the outcome. Setup, coverage and output-discard
+guards passed again.

@@ -1,0 +1,417 @@
+package de.test.antennapod.playback;
+
+import android.content.Context;
+import android.media.AudioFormat;
+import android.util.Log;
+
+import androidx.annotation.OptIn;
+import androidx.media3.common.C;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.database.StandaloneDatabaseProvider;
+import androidx.media3.datasource.cache.CacheSpan;
+import androidx.media3.datasource.cache.NoOpCacheEvictor;
+import androidx.media3.datasource.cache.SimpleCache;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.PlayerMessage;
+import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.audio.AudioOutput;
+import androidx.media3.exoplayer.audio.AudioOutputProvider;
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
+import androidx.media3.exoplayer.audio.ForwardingAudioOutput;
+import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider;
+import androidx.test.filters.LargeTest;
+import androidx.test.platform.app.InstrumentationRegistry;
+
+import de.danoeh.antennapod.model.download.DownloadRequest;
+import de.danoeh.antennapod.model.feed.FeedMedia;
+import de.danoeh.antennapod.net.download.service.feed.remote.HttpDownloader;
+import de.danoeh.antennapod.playback.service.internal.ExoPlayerUtils;
+import de.danoeh.antennapod.storage.preferences.UserPreferences;
+
+import org.apache.commons.io.IOUtils;
+import org.awaitility.Awaitility;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+@LargeTest
+@OptIn(markerClass = UnstableApi.class)
+public class ResolvedUrlPlaybackTest {
+    private static final String TAG = "ResolvedUrlPlaybackTest";
+    private static final long RESUME_MS = 17000;
+    private static final long MIN_OBSERVATION_END_MS = 27000;
+    private static final int THROTTLE_AFTER_BYTES = 320000;
+    private static final double TOLERANCE_SECONDS = 0.25;
+    private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
+    private double observationBoundary = 20;
+    private long observationEndMs = MIN_OBSERVATION_END_MS;
+    private Context context;
+    private ExoPlayer player;
+    private volatile PcmOutput sink;
+    private volatile boolean outputRecreated;
+    private File initial;
+    private File changed;
+    private volatile long playerPosition;
+
+    @Before
+    public void setUp() throws Exception {
+        context = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        UserPreferences.init(context);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(ExoPlayerUtils::releaseCache);
+        deleteCache();
+        initial = copyAsset("ad-2s.mp3");
+        changed = copyAsset("ad-6s.mp3");
+        server.start(initial, changed);
+    }
+
+    private File copyAsset(String name) throws Exception {
+        File file = File.createTempFile(name, ".mp3", context.getCacheDir());
+        try (InputStream input = InstrumentationRegistry.getInstrumentation().getContext()
+                .getAssets().open("dynamic-ads/" + name);
+                FileOutputStream output = new FileOutputStream(file)) {
+            IOUtils.copy(input, output);
+        }
+        return file;
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        server.resumeResponses();
+        try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                if (player != null) {
+                    player.release();
+                }
+                ExoPlayerUtils.releaseCache();
+            });
+        } finally {
+            try {
+                server.stop();
+            } finally {
+                try {
+                    deleteCache();
+                } finally {
+                    if (initial != null) {
+                        initial.delete();
+                    }
+                    if (changed != null) {
+                        changed.delete();
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void stableResolvedUrlAcrossPlayerRestartPreservesContent() throws Exception {
+        assertRestartedContent(false, false);
+    }
+
+    @Test
+    public void freshResolutionDoesNotMixRepresentations() throws Exception {
+        assertRestartedContent(true, false);
+    }
+
+    @Test
+    public void emptyCachePlaysCoherentBAtRestoredTimestamp() throws Exception {
+        assertRestartedContent(true, true);
+    }
+
+    private void assertRestartedContent(boolean switchResolution, boolean clearCache) throws Exception {
+        server.throttleResponsesAfter(THROTTLE_AFTER_BYTES);
+        MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
+        playResolved(media, 0);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
+                () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.stop());
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.release();
+            player = null;
+            ExoPlayerUtils.releaseCache();
+        });
+        server.resumeResponses();
+        long cachedBytes = cachedPrefix();
+        double cacheEnd = frameTimeAt(cachedBytes);
+        if (cacheEnd > RESUME_MS / 1000.0 + 2 && cachedBytes < initial.length()) {
+            observationBoundary = cacheEnd;
+            observationEndMs = Math.max(MIN_OBSERVATION_END_MS, (long) ((cacheEnd + 3) * 1000));
+        }
+        Log.i(TAG, "cachedPrefixBytes=" + cachedBytes + " cacheEndSeconds=" + cacheEnd);
+        if (clearCache) {
+            deleteCache();
+            assertEquals(0, cachedPrefix());
+        }
+        if (switchResolution) {
+            server.switchFreshResolutionsToB();
+        }
+        playResolved(media, RESUME_MS);
+        awaitResolvedContent();
+        Log.i(TAG, "restart requests=" + server.getRequests());
+        assertConsumedContent("restart changed=" + switchResolution + " emptyCache=" + clearCache,
+                !switchResolution ? 2 : clearCache ? 6 : 0);
+    }
+
+    @Test
+    public void completeDownloadKeepsContentAfterFreshResolutionChanges() throws Exception {
+        File downloaded = new File(context.getCacheDir(), "resolved-download-" + System.nanoTime() + ".mp3");
+        try {
+            String url = server.getBaseUrl() + "/resolved-ad/original";
+            DownloadRequest request = new DownloadRequest(downloaded.getAbsolutePath(), url, "Synthetic episode",
+                    0, FeedMedia.FEEDFILETYPE_FEEDMEDIA, null, null, null, false);
+            HttpDownloader downloader = new HttpDownloader(request);
+            downloader.call();
+            assertTrue(downloader.getResult().isSuccessful());
+            try (InputStream expected = new FileInputStream(initial);
+                    InputStream actual = new FileInputStream(downloaded)) {
+                assertTrue(IOUtils.contentEquals(expected, actual));
+            }
+            final int requestsBeforePlayback = server.getRequests().size();
+            server.switchFreshResolutionsToB();
+            playResolved(MediaItem.fromUri(downloaded.toURI().toString()), RESUME_MS);
+            awaitResolvedContent();
+            assertEquals(requestsBeforePlayback, server.getRequests().size());
+            assertConsumedContent("completed local download", 2);
+        } finally {
+            downloaded.delete();
+        }
+    }
+
+    private void playResolved(MediaItem media, long position) throws Exception {
+        List<PlayerMessage> messages = new ArrayList<>();
+        sink = null;
+        outputRecreated = false;
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player = ExoPlayerUtils.buildPlayer(context);
+            AudioOutputProvider provider = new ForwardingAudioOutputProvider(
+                    new AudioTrackAudioOutputProvider.Builder(context).build()) {
+                @Override
+                public AudioOutput getAudioOutput(OutputConfig config) throws InitializationException {
+                    assertEquals(C.ENCODING_PCM_16BIT, config.encoding);
+                    assertEquals(AudioFormat.CHANNEL_OUT_MONO, config.channelMask);
+                    assertFalse(config.isOffload);
+                    outputRecreated |= sink != null && sink.acceptedSamples != 0;
+                    sink = new PcmOutput(super.getAudioOutput(config), position);
+                    return sink;
+                }
+            };
+            for (int index = 0; index < player.getRendererCount(); index++) {
+                Renderer renderer = player.getRenderer(index);
+                if (renderer.getTrackType() == C.TRACK_TYPE_AUDIO) {
+                    messages.add(player.createMessage(renderer).setType(Renderer.MSG_SET_AUDIO_OUTPUT_PROVIDER)
+                            .setPayload(provider).send());
+                }
+            }
+        });
+        assertEquals(1, messages.size());
+        messages.get(0).blockUntilDelivered(5000);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.setSkipSilenceEnabled(false);
+            player.setPlaybackSpeed(1);
+            player.setMediaItem(media, position);
+            player.prepare();
+            player.play();
+        });
+    }
+
+    private void awaitResolvedContent() {
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                assertNull("Player error", player.getPlayerError());
+                playerPosition = player.getCurrentPosition();
+            });
+            return sink != null && sink.consumedUs >= observationEndMs * 1000;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
+    }
+
+    private void assertConsumedContent(String scenario, int expectedAdSeconds) {
+        assertFalse("Audio output was recreated during observation", outputRecreated);
+        assertFalse("PCM output was flushed or released during observation", sink.discardedAfterPcm);
+        List<double[]> windows = sink.consumedWindows();
+        int before = 0;
+        int after = 0;
+        int initialBefore = 0;
+        int changedAfter = 0;
+        double worstA = 0;
+        double worstB = 0;
+        for (double[] window : windows) {
+            double mediaTime = window[0];
+            double observed = (window[1] - 20) / ((10000.0 - 20) / 120);
+            double errorA = observed - (mediaTime - 2);
+            double errorB = observed - (mediaTime - 6);
+            Log.i(TAG, "scenario=" + scenario + " media=" + mediaTime + " program=" + observed
+                    + " errorA=" + errorA + " errorB=" + errorB);
+            worstA = Math.max(worstA, Math.abs(errorA));
+            worstB = Math.max(worstB, Math.abs(errorB));
+            if (mediaTime < observationBoundary - 0.5) {
+                before++;
+                if (Math.abs(errorA) < TOLERANCE_SECONDS) {
+                    initialBefore++;
+                }
+            }
+            if (mediaTime > observationBoundary + 0.5) {
+                after++;
+                if (Math.abs(errorB) < TOLERANCE_SECONDS) {
+                    changedAfter++;
+                }
+            }
+        }
+        assertTrue("Not enough consumed PCM before boundary", before >= 4);
+        assertTrue("Not enough consumed PCM after boundary", after >= 8);
+        Log.i(TAG, "boundary=" + observationBoundary + " A-before=" + initialBefore + " B-after=" + changedAfter
+                + " maxErrorA=" + worstA + " maxErrorB=" + worstB);
+        double error = expectedAdSeconds == 2 ? worstA : expectedAdSeconds == 6 ? worstB : Math.min(worstA, worstB);
+        assertTrue("Inconsistent decoded representation: maxErrorA=" + worstA + " maxErrorB=" + worstB
+                + " A-before=" + initialBefore + " B-after=" + changedAfter, error < TOLERANCE_SECONDS);
+    }
+
+    private long cachedPrefix() throws Exception {
+        StandaloneDatabaseProvider database = new StandaloneDatabaseProvider(context);
+        SimpleCache cache = new SimpleCache(new File(context.getCacheDir(), "streaming"),
+                new NoOpCacheEvictor(), database);
+        try (RandomAccessFile reference = new RandomAccessFile(initial, "r")) {
+            long prefix = 0;
+            for (String key : cache.getKeys()) {
+                long contiguous = 0;
+                for (CacheSpan span : cache.getCachedSpans(key)) {
+                    byte[] expected = new byte[(int) span.length];
+                    byte[] actual = new byte[(int) span.length];
+                    reference.seek(span.position);
+                    reference.readFully(expected);
+                    try (RandomAccessFile saved = new RandomAccessFile(span.file, "r")) {
+                        saved.readFully(actual);
+                    }
+                    assertArrayEquals("Cached span differs from A", expected, actual);
+                    if (span.position == contiguous) {
+                        contiguous += span.length;
+                    }
+                }
+                prefix = Math.max(prefix, contiguous);
+            }
+            return prefix;
+        } finally {
+            cache.release();
+            database.close();
+        }
+    }
+
+    private double frameTimeAt(long bytes) throws Exception {
+        int frames = 0;
+        try (RandomAccessFile file = new RandomAccessFile(initial, "r")) {
+            while (file.getFilePointer() < bytes) {
+                long start = file.getFilePointer();
+                int header = file.readInt();
+                assertEquals("Expected tagless MPEG-1 layer III at 128 kbps / 44.1 kHz",
+                        0xfffb9000, header & 0xfffffc00);
+                file.seek(start + 144 * 128000 / 44100 + ((header >> 9) & 1));
+                frames++;
+            }
+        }
+        return frames * 1152.0 / 44100;
+    }
+
+    private void deleteCache() {
+        StandaloneDatabaseProvider database = new StandaloneDatabaseProvider(context);
+        try {
+            SimpleCache.delete(new File(context.getCacheDir(), "streaming"), database);
+        } finally {
+            database.close();
+        }
+    }
+
+    private static class PcmOutput extends ForwardingAudioOutput {
+        private final List<double[]> windows = new ArrayList<>();
+        private final int sampleRate;
+        private final double startSeconds;
+        private long acceptedSamples;
+        private double previous;
+        private double firstCrossing;
+        private double lastCrossing;
+        private int crossings;
+        private int samples;
+        private volatile long consumedUs;
+        private volatile boolean discardedAfterPcm;
+
+        PcmOutput(AudioOutput delegate, long startMs) {
+            super(delegate);
+            sampleRate = delegate.getSampleRate();
+            startSeconds = startMs / 1000.0;
+        }
+
+        @Override
+        public synchronized boolean write(ByteBuffer buffer, int units, long timeUs) throws WriteException {
+            ByteBuffer pcm = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+            boolean handled = super.write(buffer, units, timeUs);
+            pcm.limit(buffer.position());
+            while (pcm.remaining() >= 2) {
+                double time = startSeconds + acceptedSamples++ / (double) sampleRate;
+                double value = pcm.getShort();
+                if (previous <= 0 && value > 0) {
+                    double crossing = time - value / (value - previous) / sampleRate;
+                    if (crossings++ == 0) {
+                        firstCrossing = crossing;
+                    }
+                    lastCrossing = crossing;
+                }
+                previous = value;
+                if (++samples == sampleRate / 4) {
+                    if (crossings > 1) {
+                        windows.add(new double[] {(firstCrossing + lastCrossing) / 2,
+                                (crossings - 1) / (lastCrossing - firstCrossing)});
+                    }
+                    samples = 0;
+                    crossings = 0;
+                }
+            }
+            return handled;
+        }
+
+        @Override
+        public long getPositionUs() {
+            long position = super.getPositionUs();
+            consumedUs = position < 0 ? 0 : position + (long) (startSeconds * 1000000);
+            return position;
+        }
+
+        @Override
+        public synchronized void flush() {
+            discardedAfterPcm |= acceptedSamples != 0;
+            super.flush();
+        }
+
+        @Override
+        public synchronized void release() {
+            discardedAfterPcm |= acceptedSamples != 0;
+            super.release();
+        }
+
+        synchronized List<double[]> consumedWindows() {
+            List<double[]> consumed = new ArrayList<>();
+            for (double[] window : windows) {
+                if (window[0] + 0.25 < consumedUs / 1000000.0) {
+                    consumed.add(window);
+                }
+            }
+            return consumed;
+        }
+    }
+}

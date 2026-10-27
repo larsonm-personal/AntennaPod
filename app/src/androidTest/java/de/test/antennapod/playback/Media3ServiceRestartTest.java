@@ -6,25 +6,30 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Looper;
 import android.util.Log;
+
 import androidx.annotation.OptIn;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.database.StandaloneDatabaseProvider;
+import androidx.media3.datasource.cache.SimpleCache;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
 import androidx.test.filters.LargeTest;
 import androidx.test.platform.app.InstrumentationRegistry;
+
 import de.danoeh.antennapod.model.feed.Feed;
 import de.danoeh.antennapod.model.feed.FeedItem;
 import de.danoeh.antennapod.model.feed.FeedMedia;
 import de.danoeh.antennapod.playback.base.MediaItemAdapter;
+import de.danoeh.antennapod.playback.base.RewindAfterPauseUtils;
 import de.danoeh.antennapod.playback.service.Media3PlaybackService;
 import de.danoeh.antennapod.storage.database.DBReader;
 import de.danoeh.antennapod.storage.database.PodDBAdapter;
-import de.danoeh.antennapod.storage.preferences.UserPreferences;
 import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
+import de.danoeh.antennapod.storage.preferences.UserPreferences;
 import de.test.antennapod.EspressoTestUtils;
-import de.test.antennapod.util.service.download.HTTPBin;
+
 import org.apache.commons.io.IOUtils;
 import org.awaitility.Awaitility;
 import org.junit.After;
@@ -41,12 +46,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 public class Media3ServiceRestartTest {
-    private final HTTPBin server = new HTTPBin();
+    private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
     private Context context;
     private MediaController controller;
     private File initial;
@@ -54,18 +60,20 @@ public class Media3ServiceRestartTest {
     private FeedMedia media;
     private volatile long position;
     private volatile long restoredPosition = -1;
+    private volatile long restoredAt;
 
     @Before
     public void setUp() throws Exception {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         stopService();
+        deleteCache();
         EspressoTestUtils.clearPreferences();
         EspressoTestUtils.clearDatabase();
         UserPreferences.setAllowMobileStreaming(true);
         initial = copyAsset("ad-2s.mp3");
         changed = copyAsset("ad-6s.mp3");
-        server.start();
-        server.serveResolvedAds(initial, changed, true);
+        server.start(initial, changed);
+        server.throttleResponsesAfter(320000);
         Feed feed = new Feed(server.getBaseUrl() + "/feed", null, "Synthetic subscription", null, null);
         FeedItem item = new FeedItem(0, "Synthetic episode", "episode", null, new Date(), FeedItem.UNPLAYED, feed);
         media = new FeedMedia(item, server.getBaseUrl() + "/resolved-ad/original", initial.length(), "audio/mpeg");
@@ -79,41 +87,49 @@ public class Media3ServiceRestartTest {
 
     @After
     public void tearDown() throws Exception {
-        stopService();
-        server.releaseResolvedGate();
-        server.stop();
-        if (initial != null) {
-            initial.delete();
-        }
-        if (changed != null) {
-            changed.delete();
+        server.resumeResponses();
+        try {
+            stopService();
+            deleteCache();
+        } finally {
+            try {
+                server.stop();
+            } finally {
+                if (initial != null) {
+                    initial.delete();
+                }
+                if (changed != null) {
+                    changed.delete();
+                }
+            }
         }
     }
 
     @Test
-    public void pauseResumeKeepsResolvedUrl() throws Exception {
+    public void pauseResumeKeepsPlaybackPosition() throws Exception {
         startAndPause();
         final long pausedPosition = position;
-        server.selectResolvedB();
-        server.releaseResolvedGate();
+        server.switchFreshResolutionsToB();
+        server.resumeResponses();
         onMain(() -> controller.play());
         awaitPosition(pausedPosition + 3000);
-        List<String> requests = server.getResolvedRequests();
+        List<String> requests = server.getRequests();
         Log.i("Media3ServiceRestartTest", "pause/resume requests=" + requests);
-        assertEquals(1, requests.stream().filter(request -> request.equals("HEAD original null")).count());
-        assertTrue(requests.stream().anyMatch(request -> request.startsWith("GET A bytes=")));
-        assertTrue(requests.stream().noneMatch(request -> request.startsWith("GET B")));
+        onMain(() -> assertEquals(String.valueOf(media.getId()), controller.getCurrentMediaItem().mediaId));
     }
 
     @Test
-    public void serviceRestartRestoresPositionAndResolvesAgain() throws Exception {
+    public void serviceRestartRestoresSavedPosition() throws Exception {
         startAndPause();
         stopService();
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> DBReader.getFeedMedia(media.getId()).getPosition() >= 17000);
-        final int savedPosition = DBReader.getFeedMedia(media.getId()).getPosition();
-        server.releaseResolvedGate();
-        server.selectResolvedB();
+        FeedMedia saved = DBReader.getFeedMedia(media.getId());
+        final int savedPosition = saved.getPosition();
+        final long pausedAt = saved.getLastPlayedTimeStatistics();
+        assertTrue("Missing pause timestamp", pausedAt > 0);
+        server.resumeResponses();
+        server.switchFreshResolutionsToB();
         connect();
         onMain(() -> {
             assertEquals(0, controller.getMediaItemCount());
@@ -121,6 +137,7 @@ public class Media3ServiceRestartTest {
                 @Override
                 public void onMediaItemTransition(MediaItem item, int reason) {
                     restoredPosition = controller.getCurrentPosition();
+                    restoredAt = System.currentTimeMillis();
                 }
             });
             controller.play();
@@ -131,15 +148,14 @@ public class Media3ServiceRestartTest {
             assertNotNull(controller.getCurrentMediaItem());
             assertEquals(String.valueOf(media.getId()), controller.getCurrentMediaItem().mediaId);
         });
-        List<String> requests = server.getResolvedRequests();
+        List<String> requests = server.getRequests();
         Log.i("Media3ServiceRestartTest", "savedPosition=" + savedPosition + " restoredPosition=" + restoredPosition
                 + " resumedPosition=" + position
                 + " requests=" + requests);
-        assertTrue("Saved position was not restored", restoredPosition >= savedPosition - 3000
-                && restoredPosition <= savedPosition);
-        assertEquals(2, requests.stream().filter(request -> request.equals("HEAD original null")).count());
-        assertTrue(requests.contains("HEAD B null"));
-        assertTrue(requests.stream().anyMatch(request -> request.matches("GET B bytes=[1-9][0-9]*-.*")));
+        assertTrue("Setup exceeded the short-pause interval", restoredAt > pausedAt
+                && restoredAt - pausedAt < RewindAfterPauseUtils.ELAPSED_TIME_FOR_SHORT_REWIND);
+        assertEquals("Saved position and normal short-pause rewind", savedPosition
+                - RewindAfterPauseUtils.MINIMUM_REWIND, restoredPosition);
     }
 
     private void startAndPause() throws Exception {
@@ -149,7 +165,7 @@ public class Media3ServiceRestartTest {
             controller.prepare();
             controller.play();
         });
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasResolvedPrefix);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
         awaitPosition(17000);
         onMain(() -> {
             controller.pause();
@@ -166,7 +182,7 @@ public class Media3ServiceRestartTest {
     private void awaitPosition(long minimum) {
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
             onMain(() -> {
-                assertEquals(null, controller.getPlayerError());
+                assertNull(controller.getPlayerError());
                 position = controller.getCurrentPosition();
             });
             return position >= minimum;
@@ -190,6 +206,15 @@ public class Media3ServiceRestartTest {
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> manager.getRunningServices(Integer.MAX_VALUE).stream()
                         .noneMatch(info -> service.equals(info.service)));
+    }
+
+    private void deleteCache() {
+        StandaloneDatabaseProvider database = new StandaloneDatabaseProvider(context);
+        try {
+            SimpleCache.delete(new File(context.getCacheDir(), "streaming"), database);
+        } finally {
+            database.close();
+        }
     }
 
     private File copyAsset(String name) throws Exception {
