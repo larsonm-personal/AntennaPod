@@ -194,3 +194,46 @@ one invocation, which this mode does not model. Python networking and an exact b
 cut are approximations, not an actual AntennaPod run. In legacy staged mode, signed URLs are held in memory
 only; persisted routes are redacted/hashes. Keep the whole capture directory private.
 Run local staged fixtures with `py -3 scripts/testDownloadEpisode.py`.
+
+
+## Overnight route watch without downloading audio
+
+In Windows Command Prompt:
+
+```bat
+git pull --ff-only
+py -3 scripts/watchEpisodeRoute.py --trace-log "%USERPROFILE%\Downloads\full-logs (1).txt" --output "%USERPROFILE%\Downloads\route-watch-1"
+```
+
+Or replace `--trace-log ...` with `--prompt-url` for hidden entry of the **episode
+audio URL**, not the subscription RSS. Keep the PC awake and connected; this script
+does not change power or network settings. Ctrl+C stops it safely. Use a new output
+directory for another run; existing evidence is never overwritten.
+
+Defaults: eight hours, 15 minutes between completed checks, at most 32 checks.
+`--hours` accepts greater than 0 through 24; `--interval` is seconds, 60 through 3600.
+Each check starts at the same original episode URL and follows at most five redirects
+(six HEAD requests), preserving HEAD throughout. It never sends GET, performs a range
+probe, fetches RSS, reads an audio body, or falls back when HEAD is unsupported. It
+uses the same fixed diagnostic User-Agent and HEAD headers as the capture tool, with
+no cache-busting or identity rotation. This repeated resolution experiment differs
+from the player's pinned URL during an existing load.
+
+The private, append-only `events.jsonl` contains exact URLs, all observed redirect
+headers/Locations, final status/URL, declared length, ETag, Last-Modified, outgoing
+headers, UTC timestamps and elapsed time. Each completed event is flushed to disk.
+Console output shows only status and names of changed fields, never secret URLs.
+Authentication errors, unsupported HEAD, rate limits and other HTTP errors stop the
+run; 429 Retry-After remains recorded, with no automatic retry. Transport errors are
+recorded at the normal interval; three consecutive failures stop it. The socket
+operation timeout is 20 seconds and redirects are bounded; an in-flight check can
+finish after the requested duration. No scheduler/service installation is needed.
+
+Traffic is limited to HEAD exchanges, headers and connection/TLS overhead, rather
+than the MP3 stream. Data use depends on redirects, headers, proxy/TLS behavior and
+server compliance; there is no promised byte total. HEAD responses may differ from
+GET. New signed URLs/session tokens do not prove changed audio; stable routes or
+validators do not prove the same content either. This monitor cannot detect an audible
+skip without a later content capture. Keep the journal private and out of Git.
+
+Local checks: `py -3 scripts/testWatchEpisodeRoute.py`.

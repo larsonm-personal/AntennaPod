@@ -60,6 +60,17 @@ def enclosure(opener):
     return urllib.parse.urljoin(FEED_URL, audio[0].get("url")), published
 
 
+def episode_url_from_log(path):
+    urls = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.search(r" resolver[.]original=(.*)$", line)
+        if match:
+            urls.add(json.loads(match[1]))
+    if len(urls) != 1 or not isinstance(next(iter(urls)), str):
+        raise ValueError("The log must contain exactly one original episode URL")
+    return urls.pop()
+
+
 def feed_episode(xml, url):
     matches = [item for item in ET.fromstring(xml).findall("./channel/item")
                if any(entry.get("url") == url for entry in item.findall("enclosure"))]
@@ -96,7 +107,7 @@ class Redirects(urllib.request.HTTPRedirectHandler):
                 location=headers.get("Location"), next_url=url,
                 next_method=request.get_method() if redirected is not None else None)
             try:
-                body = response.read(65537)
+                body = b"" if request.get_method() == "HEAD" else response.read(65537)
             finally:
                 response.close()
             self.observations[-1].update(body_base64=base64.b64encode(body[:65536]).decode("ascii"),
@@ -327,14 +338,7 @@ def main():
         if args.url or args.prompt_url:
             parser.error("Choose only one URL input method.")
         try:
-            urls = set()
-            for line in args.trace_log.read_text(encoding="utf-8").splitlines():
-                match = re.search(r" resolver[.]original=(.*)$", line)
-                if match:
-                    urls.add(json.loads(match[1]))
-            if len(urls) != 1:
-                parser.error("The log must contain exactly one original episode URL; use --prompt-url instead.")
-            args.url = urls.pop()
+            args.url = episode_url_from_log(args.trace_log)
         except (OSError, ValueError):
             parser.error("Unable to read episode URL from the local diagnostic log.")
     if args.prompt_url:
