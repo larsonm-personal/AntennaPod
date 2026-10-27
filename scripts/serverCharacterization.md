@@ -568,3 +568,60 @@ With the proxy and finalized-position setup, both local release service tests pa
 (81.38 seconds). Saved position 17,489 ms restored at 16,689 ms, exactly 800 ms back;
 pause/resume also passed. Build, focused Checkstyle and shell regression checks passed.
 Hosted requalification is still required; the prior canceled matrix is not a pass.
+
+### Hosted requalification on d6f9fc75
+
+[Run 40596520229](https://github.com/larsonm-personal/AntennaPod/actions/runs/40596520229)
+completed every matrix job. Wrapper, static analysis and unit/build jobs passed.
+All 14 emulator attempts discovered 79 app tests. The only failed case was
+`freshResolutionDoesNotMixRepresentations`; controls, HTTP checks and service tests
+passed. There were no remaining setup/linkage or unrelated test failures.
+
+| Configuration | Attempt statuses | Added diagnostic lines | Artifact ID |
+| --- | --- | --- | --- |
+| API 23 debug | 1, 1, 1 | 95 | 12778665409 |
+| API 30 debug | 1, 1, 1 | 89 | 12777647848 |
+| API 36 debug | 1, 1, 1 | 101 | 12778590675 |
+| API 23 release | 1, 1, 1 | 95 | 12778320427 |
+| API 36 release | 1, 0 | 37 | 12777970156 |
+
+Each content failure observed 30 A windows before the boundary and 9 or 10 B
+windows afterward, with maximum A error about 60.0566–60.0892 seconds. Continuous
+logcat capture made the measurements, requests and service rewind visible inline.
+All five matrix-specific artifacts uploaded successfully and are linked beside
+the excerpts. Their archive bytes cannot be read from this executor: both the
+GitHub storage URL and the connector-returned file URL received proxy HTTP 403.
+The connector itself retrieves artifacts successfully; independent review inspected
+the API-36 release archive, including its retained failed and passing attempts.
+
+API-36 release's second attempt genuinely executed the target case and consumed
+coherent B (A-before=0, B-after=9, maxErrorB=0.1168778 seconds). Cached A spans had
+been verified, including a span starting at 1,679,558 with length 582,656, but the
+resumed request fetched B from byte 2,087,710 across that region. Thus this is a
+legitimate pass under the coherent-A-or-B oracle, not a skipped test. The exact
+reason that run did not use those cached bytes has not been established. Media3's
+nonblocking CacheDataSource can bypass cache; SimpleCache returns a cached span
+when one exists for the requested key and position. These source facts alone do
+not establish which path the passing run took. Do not retrofit a must-mix assertion.
+
+The existing retry policy made that job green after its second attempt. A narrow
+future CI option is to retain a failed job result once this consumed-content
+assertion has failed, while still allowing ordinary legacy failures to recover
+on retry. That policy is not implemented here; all attempt evidence is preserved.
+
+The service setup correction is not equivalent persistence-proximity coverage.
+The recorded failure was controller=17,112 ms versus finalized saved=16,960 ms.
+Media3 1.10.0 MediaControllerImplBase.getCurrentPosition delegates to
+MediaUtils.getUpdatedCurrentPositionMs, which estimates from session time while
+playing and may retain that estimate pending a new session update. The service
+instead reads its player in saveCurrentPosition on pause and teardown, then queues
+the database write. A controller threshold therefore does not guarantee the same
+saved-position floor. After the shutdown/database barrier the value cannot advance.
+The current test requires a non-clamped saved position and exact saved-minus-800
+restoration; it does not independently bound persistence error against the paused
+controller estimate. This narrowed claim remains subject to review.
+
+A second local release service run passed both cases (75.984 seconds), including
+saved 17,173 ms to restored 16,373 ms. Neither these results nor the hosted matrix
+freeze the test or establish the user's actual lifecycle trigger. PR #8441 remains
+uninspected.
