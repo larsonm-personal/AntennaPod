@@ -146,6 +146,17 @@ jobs:
       - name: Create keystore for the release build
         if: matrix.version.build-type == 'release'
         run: keytool -genkeypair -dname "cn=AntennaPod CI, o=AntennaPod, c=DE" -alias alias -keystore app/keystore -storepass password -keypass password -keyalg RSA -keysize 2048 -validity 10000
+      - name: Set up playback fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 ffmpeg
+          python3 --version
+          ffmpeg -version
+          ffmpeg -hide_banner -encoders | grep libmp3lame
+      - name: Check emulator test runner
+        run: |
+          bash -n .github/workflows/runEmulatorTests.sh .github/workflows/testRunEmulatorTests.sh
+          bash .github/workflows/testRunEmulatorTests.sh
       - name: Build with Gradle (debug)
         if: matrix.version.build-type == 'debug'
         run: ./gradlew assemblePlayDebugAndroidTest -PtestBuildType=debug
@@ -167,12 +178,14 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: bash .github/workflows/runEmulatorTests.sh ${{ matrix.version.build-type }}
+          script: bash .github/workflows/runEmulatorTests.sh ${{ matrix.version.build-type }} ${{ matrix.version.api-level }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: failure()
+        if: always()
         with:
-          name: test-report
-          path: app/build/reports/androidTests/
+          name: test-report-api-${{ matrix.version.api-level }}-${{ matrix.version.build-type }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/ci-emulator/
 
   ci-summary:
     name: "CI Summary"
