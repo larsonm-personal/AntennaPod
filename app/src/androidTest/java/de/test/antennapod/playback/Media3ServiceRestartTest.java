@@ -25,6 +25,7 @@ import de.danoeh.antennapod.playback.base.MediaItemAdapter;
 import de.danoeh.antennapod.playback.base.RewindAfterPauseUtils;
 import de.danoeh.antennapod.playback.service.Media3PlaybackService;
 import de.danoeh.antennapod.storage.database.DBReader;
+import de.danoeh.antennapod.storage.database.DBWriter;
 import de.danoeh.antennapod.storage.database.PodDBAdapter;
 import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
@@ -42,6 +43,7 @@ import java.io.InputStream;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
@@ -70,10 +72,10 @@ public class Media3ServiceRestartTest {
         EspressoTestUtils.clearPreferences();
         EspressoTestUtils.clearDatabase();
         UserPreferences.setAllowMobileStreaming(true);
-        initial = copyAsset("ad-2s.mp3");
-        changed = copyAsset("ad-6s.mp3");
+        initial = copyAsset("resolved-a.mp3");
+        changed = copyAsset("resolved-b.mp3");
         server.start(initial, changed);
-        server.throttleResponsesAfter(320000);
+        server.throttleResponsesAfter(512000);
         Feed feed = new Feed(server.getBaseUrl() + "/feed", null, "Synthetic subscription", null, null);
         FeedItem item = new FeedItem(0, "Synthetic episode", "episode", null, new Date(), FeedItem.UNPLAYED, feed);
         media = new FeedMedia(item, server.getBaseUrl() + "/resolved-ad/original", initial.length(), "audio/mpeg");
@@ -122,6 +124,8 @@ public class Media3ServiceRestartTest {
     public void serviceRestartRestoresSavedPosition() throws Exception {
         startAndPause();
         stopService();
+        Log.i("Media3ServiceRestartTest", "pausedControllerPosition=" + position
+                + " savedAfterShutdown=" + DBReader.getFeedMedia(media.getId()).getPosition());
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> DBReader.getFeedMedia(media.getId()).getPosition() >= 17000);
         FeedMedia saved = DBReader.getFeedMedia(media.getId());
@@ -189,7 +193,7 @@ public class Media3ServiceRestartTest {
         });
     }
 
-    private void stopService() {
+    private void stopService() throws Exception {
         if (controller != null) {
             onMain(() -> controller.pause());
             Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() ->
@@ -206,6 +210,8 @@ public class Media3ServiceRestartTest {
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> manager.getRunningServices(Integer.MAX_VALUE).stream()
                         .noneMatch(info -> service.equals(info.service)));
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        CompletableFuture.runAsync(DBWriter::tearDownTests).get(5, TimeUnit.SECONDS);
     }
 
     private void deleteCache() {
