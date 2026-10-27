@@ -59,6 +59,27 @@ android {
     }
 }
 
+abstract class GeneratePlaybackFixtures extends Exec {
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+}
+
+def generatePlaybackFixtures = tasks.register("generatePlaybackFixtures", GeneratePlaybackFixtures) {
+    def generator = layout.projectDirectory.file("src/androidTest/fixtures/dynamic-ads/generate.py")
+    inputs.file(generator)
+    outputDirectory.set(layout.buildDirectory.dir("generated/playbackFixtures"))
+    commandLine providers.gradleProperty("fixturePython").getOrElse("python3"),
+            generator.asFile, outputDirectory.dir("dynamic-ads").get().asFile
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.androidTest?.sources?.assets?.addGeneratedSourceDirectory(generatePlaybackFixtures) {
+            it.outputDirectory
+        }
+    }
+}
+
 dependencies {
     implementation project(":event")
     implementation project(':model')

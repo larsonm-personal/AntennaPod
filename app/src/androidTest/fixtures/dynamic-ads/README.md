@@ -36,3 +36,21 @@ On API 30, the stable control passes (maximum error about 13 ms); the changed-ad
 continuity assertion fails (about 4.013 seconds repeated). The failing assertion is
 intentional in this demo branch. This demonstrates one simulated mechanism, not the
 proven cause of every reported skip. There is no playback bug fix in this change.
+
+## Generating the fixtures
+
+Android instrumentation builds require Python 3 and FFmpeg with the libmp3lame
+encoder on PATH. They install neither tool. Ordinary app builds do not generate
+these fixtures. Set `-PfixturePython=python` (or an executable path) if Python 3
+is not named `python3` on your machine.
+
+```sh
+./gradlew :app:assembleDebug
+./gradlew :app:assemblePlayDebugAndroidTest
+```
+
+The generator was checked with Python 3.12.14 and FFmpeg 7.1.5/libmp3lame. Two clean
+generations must produce identical bytes with the same tools; encoder versions
+may change the MP3 bytes. After changing tools, regenerate with
+`./gradlew :app:generatePlaybackFixtures --rerun-tasks`. Generated files belong
+only under the ignored build directory, never in Git.
