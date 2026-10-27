@@ -106,7 +106,7 @@ public class Media3ServiceRestartTest {
     }
 
     @Test
-    public void pauseResumeKeepsPlaybackPosition() throws Exception {
+    public void pauseResumeContinuesSameEpisode() throws Exception {
         startAndPause();
         final long pausedPosition = position;
         server.switchFreshResolutionsToB();
