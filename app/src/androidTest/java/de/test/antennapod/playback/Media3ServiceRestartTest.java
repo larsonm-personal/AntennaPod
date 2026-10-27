@@ -207,9 +207,14 @@ public class Media3ServiceRestartTest {
         ComponentName service = new ComponentName(context, Media3PlaybackService.class);
         context.stopService(new Intent().setComponent(service));
         ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
-                () -> manager.getRunningServices(Integer.MAX_VALUE).stream()
-                        .noneMatch(info -> service.equals(info.service)));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+            for (ActivityManager.RunningServiceInfo info : manager.getRunningServices(Integer.MAX_VALUE)) {
+                if (service.equals(info.service)) {
+                    return false;
+                }
+            }
+            return true;
+        });
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
         FutureTask<Void> databaseIdle = new FutureTask<>(DBWriter::tearDownTests, null);
         new Thread(databaseIdle, "TestDatabaseBarrier").start();
