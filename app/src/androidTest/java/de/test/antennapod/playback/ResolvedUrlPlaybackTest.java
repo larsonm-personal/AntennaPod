@@ -56,12 +56,15 @@ import static org.junit.Assert.assertTrue;
 @OptIn(markerClass = UnstableApi.class)
 public class ResolvedUrlPlaybackTest {
     private static final String TAG = "ResolvedUrlPlaybackTest";
-    private static final long RESUME_MS = 17000;
-    private static final long MIN_OBSERVATION_END_MS = 27000;
-    private static final int THROTTLE_AFTER_BYTES = 320000;
+    private static final long INITIAL_SEEK_MS = 70000;
+    private static final long RESUME_MS = 87000;
+    private static final long MIN_OBSERVATION_END_MS = 97000;
+    private static final int THROTTLE_AFTER_BYTES = 512000;
+    private static final double INITIAL_AD_SECONDS = 2 + 2299 * 1152.0 / 44100;
+    private static final int CHANGED_AD_SECONDS = 2;
     private static final double TOLERANCE_SECONDS = 0.25;
     private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
-    private double observationBoundary = 20;
+    private double observationBoundary = 90;
     private long observationEndMs = MIN_OBSERVATION_END_MS;
     private Context context;
     private ExoPlayer player;
@@ -77,8 +80,8 @@ public class ResolvedUrlPlaybackTest {
         UserPreferences.init(context);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(ExoPlayerUtils::releaseCache);
         deleteCache();
-        initial = copyAsset("ad-2s.mp3");
-        changed = copyAsset("ad-6s.mp3");
+        initial = copyAsset("resolved-a.mp3");
+        changed = copyAsset("resolved-b.mp3");
         server.start(initial, changed);
     }
 
@@ -138,7 +141,7 @@ public class ResolvedUrlPlaybackTest {
     private void assertRestartedContent(boolean switchResolution, boolean clearCache) throws Exception {
         server.throttleResponsesAfter(THROTTLE_AFTER_BYTES);
         MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
-        playResolved(media, 0);
+        playResolved(media, INITIAL_SEEK_MS);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
@@ -149,16 +152,16 @@ public class ResolvedUrlPlaybackTest {
             ExoPlayerUtils.releaseCache();
         });
         server.resumeResponses();
-        long cachedBytes = cachedPrefix();
-        double cacheEnd = frameTimeAt(cachedBytes);
-        if (cacheEnd > RESUME_MS / 1000.0 + 2 && cachedBytes < initial.length()) {
+        long cachedEndBytes = cachedEndAtResume();
+        double cacheEnd = frameTimeAt(cachedEndBytes);
+        if (cacheEnd > RESUME_MS / 1000.0 + 2 && cachedEndBytes < initial.length()) {
             observationBoundary = cacheEnd;
             observationEndMs = Math.max(MIN_OBSERVATION_END_MS, (long) ((cacheEnd + 3) * 1000));
         }
-        Log.i(TAG, "cachedPrefixBytes=" + cachedBytes + " cacheEndSeconds=" + cacheEnd);
+        Log.i(TAG, "cachedEndBytes=" + cachedEndBytes + " cacheEndSeconds=" + cacheEnd);
         if (clearCache) {
             deleteCache();
-            assertEquals(0, cachedPrefix());
+            assertEquals(0, cachedEndAtResume());
         }
         if (switchResolution) {
             server.switchFreshResolutionsToB();
@@ -167,7 +170,7 @@ public class ResolvedUrlPlaybackTest {
         awaitResolvedContent();
         Log.i(TAG, "restart requests=" + server.getRequests());
         assertConsumedContent("restart changed=" + switchResolution + " emptyCache=" + clearCache,
-                !switchResolution ? 2 : clearCache ? 6 : 0);
+                !switchResolution ? INITIAL_AD_SECONDS : clearCache ? CHANGED_AD_SECONDS : 0);
     }
 
     @Test
@@ -189,7 +192,7 @@ public class ResolvedUrlPlaybackTest {
             playResolved(MediaItem.fromUri(downloaded.toURI().toString()), RESUME_MS);
             awaitResolvedContent();
             assertEquals(requestsBeforePlayback, server.getRequests().size());
-            assertConsumedContent("completed local download", 2);
+            assertConsumedContent("completed local download", INITIAL_AD_SECONDS);
         } finally {
             downloaded.delete();
         }
@@ -243,7 +246,7 @@ public class ResolvedUrlPlaybackTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
     }
 
-    private void assertConsumedContent(String scenario, int expectedAdSeconds) {
+    private void assertConsumedContent(String scenario, double expectedAdSeconds) {
         assertFalse("Audio output was recreated during observation", outputRecreated);
         assertFalse("PCM output was flushed or released during observation", sink.discardedAfterPcm);
         List<double[]> windows = sink.consumedWindows();
@@ -256,8 +259,8 @@ public class ResolvedUrlPlaybackTest {
         for (double[] window : windows) {
             double mediaTime = window[0];
             double observed = (window[1] - 20) / ((10000.0 - 20) / 120);
-            double errorA = observed - (mediaTime - 2);
-            double errorB = observed - (mediaTime - 6);
+            double errorA = observed - (mediaTime - INITIAL_AD_SECONDS);
+            double errorB = observed - (mediaTime - CHANGED_AD_SECONDS);
             Log.i(TAG, "scenario=" + scenario + " media=" + mediaTime + " program=" + observed
                     + " errorA=" + errorA + " errorB=" + errorB);
             worstA = Math.max(worstA, Math.abs(errorA));
@@ -279,19 +282,20 @@ public class ResolvedUrlPlaybackTest {
         assertTrue("Not enough consumed PCM after boundary", after >= 8);
         Log.i(TAG, "boundary=" + observationBoundary + " A-before=" + initialBefore + " B-after=" + changedAfter
                 + " maxErrorA=" + worstA + " maxErrorB=" + worstB);
-        double error = expectedAdSeconds == 2 ? worstA : expectedAdSeconds == 6 ? worstB : Math.min(worstA, worstB);
+        double error = expectedAdSeconds == INITIAL_AD_SECONDS ? worstA
+                : expectedAdSeconds == CHANGED_AD_SECONDS ? worstB : Math.min(worstA, worstB);
         assertTrue("Inconsistent decoded representation: maxErrorA=" + worstA + " maxErrorB=" + worstB
                 + " A-before=" + initialBefore + " B-after=" + changedAfter, error < TOLERANCE_SECONDS);
     }
 
-    private long cachedPrefix() throws Exception {
+    private long cachedEndAtResume() throws Exception {
         StandaloneDatabaseProvider database = new StandaloneDatabaseProvider(context);
         SimpleCache cache = new SimpleCache(new File(context.getCacheDir(), "streaming"),
                 new NoOpCacheEvictor(), database);
         try (RandomAccessFile reference = new RandomAccessFile(initial, "r")) {
-            long prefix = 0;
+            long end = 0;
+            long resumeByte = frameOffsetAt(RESUME_MS);
             for (String key : cache.getKeys()) {
-                long contiguous = 0;
                 for (CacheSpan span : cache.getCachedSpans(key)) {
                     byte[] expected = new byte[(int) span.length];
                     byte[] actual = new byte[(int) span.length];
@@ -301,13 +305,14 @@ public class ResolvedUrlPlaybackTest {
                         saved.readFully(actual);
                     }
                     assertArrayEquals("Cached span differs from A", expected, actual);
-                    if (span.position == contiguous) {
-                        contiguous += span.length;
-                    }
+                    Log.i(TAG, "cachedSpanStart=" + span.position + " length=" + span.length);
                 }
-                prefix = Math.max(prefix, contiguous);
+                long length = cache.getCachedLength(key, resumeByte, initial.length() - resumeByte);
+                if (length > 0) {
+                    end = Math.max(end, resumeByte + length);
+                }
             }
-            return prefix;
+            return end;
         } finally {
             cache.release();
             database.close();
@@ -319,14 +324,29 @@ public class ResolvedUrlPlaybackTest {
         try (RandomAccessFile file = new RandomAccessFile(initial, "r")) {
             while (file.getFilePointer() < bytes) {
                 long start = file.getFilePointer();
-                int header = file.readInt();
-                assertEquals("Expected tagless MPEG-1 layer III at 128 kbps / 44.1 kHz",
-                        0xfffb9000, header & 0xfffffc00);
-                file.seek(start + 144 * 128000 / 44100 + ((header >> 9) & 1));
+                file.seek(start + frameSize(file.readInt()));
                 frames++;
             }
         }
         return frames * 1152.0 / 44100;
+    }
+
+    private long frameOffsetAt(long timeMs) throws Exception {
+        int frames = 0;
+        try (RandomAccessFile file = new RandomAccessFile(initial, "r")) {
+            while (frames * 1152.0 / 44100 < timeMs / 1000.0) {
+                long start = file.getFilePointer();
+                file.seek(start + frameSize(file.readInt()));
+                frames++;
+            }
+            return file.getFilePointer();
+        }
+    }
+
+    private int frameSize(int header) {
+        assertEquals("Expected tagless MPEG-1 layer III at 192 kbps / 44.1 kHz",
+                0xfffbb000, header & 0xfffffc00);
+        return 144 * 192000 / 44100 + ((header >> 9) & 1);
     }
 
     private void deleteCache() {

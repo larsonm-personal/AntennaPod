@@ -146,7 +146,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
             return new Response(Response.Status.INTERNAL_ERROR, "text/plain", "");
         }
         CountDownLatch gate = responseGate;
-        boolean throttle = start == 0 && session.getMethod() == Method.GET && gate.getCount() > 0;
+        boolean throttle = session.getMethod() == Method.GET && gate.getCount() > 0;
         InputStream body = new InputStream() {
             private final ByteArrayInputStream source = new ByteArrayInputStream(bytes);
             private int sent;

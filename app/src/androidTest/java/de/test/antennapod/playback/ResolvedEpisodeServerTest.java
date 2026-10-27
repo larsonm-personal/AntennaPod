@@ -85,16 +85,21 @@ public class ResolvedEpisodeServerTest {
 
     @Test
     public void resumingThrottledResponseDoesNotTruncateIt() throws Exception {
+        assertThrottledResponse(0);
+        assertThrottledResponse(1000);
+    }
+
+    private void assertThrottledResponse(int start) throws Exception {
         server.throttleResponsesAfter(1024);
-        HttpURLConnection response = open("A", "GET", null);
+        HttpURLConnection response = open("A", "GET", start == 0 ? null : "bytes=" + start + "-");
         try (InputStream input = response.getInputStream()) {
-            assertEquals(bytesA.length, response.getContentLength());
+            assertEquals(bytesA.length - start, response.getContentLength());
             byte[] prefix = new byte[1024];
             IOUtils.readFully(input, prefix);
             Awaitility.await().atMost(5, TimeUnit.SECONDS).until(server::hasSentPrefix);
             server.resumeResponses();
-            assertArrayEquals(Arrays.copyOfRange(bytesA, 0, 1024), prefix);
-            assertArrayEquals(Arrays.copyOfRange(bytesA, 1024, bytesA.length), IOUtils.toByteArray(input));
+            assertArrayEquals(Arrays.copyOfRange(bytesA, start, start + 1024), prefix);
+            assertArrayEquals(Arrays.copyOfRange(bytesA, start + 1024, bytesA.length), IOUtils.toByteArray(input));
             assertEquals(-1, input.read());
         } finally {
             response.disconnect();

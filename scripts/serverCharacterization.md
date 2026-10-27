@@ -11,6 +11,7 @@ mechanism demonstration. It is not a validated model of the private provider.
 | Observed in those successful HEAD responses | Declared lengths: 127,079,742 bytes in 23 checks and 125,638,411 bytes in seven. Two values of a query parameter tracked those two lengths in this finite sample. Other session/request/time values changed routinely. No ETag or Last-Modified was supplied. |
 | Previously reported capture result | The earlier network-switch captures of the longer representation were byte-identical; the listener confirmed a complete ending. This does not characterize the shorter representation or subsequent provider state. |
 | Observed in the subsequent supplied characterization | Fresh original-URL HEAD resolutions 903 seconds apart selected the two lengths above. The exact first resolved URL retained its length, did not redirect, and returned identical bytes at all three sampled intervals after that delay. Fresh-resolution interior MP3 samples differed. The identical initial 64 KB was inside a 357,863-byte ID3 artwork tag, not audio. |
+| Observed in the subsequent user-run offline alignment | All three saved baseline A windows and total length match the existing full A. At two interior B locations, three unique 4,096-byte blocks per location match A 1,441,331 bytes later. A frame indexing gives 2,299 frames, or 60.055510204 seconds, of displacement at both locations. FFmpeg was unavailable; this is encoded correspondence, not a decoded comparison. |
 | Unknown | Stability outside that finite observation, expiry, HEAD/GET differences, and full program alignment across representations. |
 | Unknown | Whether the two lengths correspond to differing ad arrangements, underlying program changes, metadata differences or some other representation change. The correlated query value's meaning is not established. |
 | Supported finite model | Fresh resolution can select differing bytes while the previously resolved URL remains stable at the measured intervals. Ad timing and whole-file identity remain unmeasured. |
@@ -403,3 +404,80 @@ the mixed-content assertion. This time the actual cached prefix was 440,111 byte
 windows after; whole-layout errors were 4.007354 s against A and 4.014972 s against B.
 The changed boundary did not change the outcome. Setup, coverage and output-discard
 guards passed again.
+
+### Shorter B: local correspondence and a candidate fixture
+
+The user-run alignment supplied the missing local direction. B samples starting at
+63,539,871 and 95,309,806 bytes match A at 64,981,202 and 96,751,137 bytes respectively.
+Each has three unique 4,096-byte blocks at sample offsets 2,048, 30,720 and 59,392,
+all agreeing on the displacement; six complete MP3 frames fit in each first block.
+At the first location A's frame clock changes from 2,632.568163 to 2,692.623673 seconds;
+at the second it changes from 3,956.323265 to 4,016.378776 seconds. Both differences
+are 2,299 MPEG-1 frames at 44.1 kHz (60.055510204 seconds). The byte displacement equals
+the measured total-length difference. These observations support later A content at
+those B offsets, not a single deletion, a known ad boundary, or complete B equivalence.
+
+The refined fixture uses a synthetic two-second segment in B and an additional
+2,299 frames in A, at program second five. It is encoded at 192 kbps and 44.1 kHz.
+A has 6,971 frames and 4,370,390 bytes; B has 4,672 frames and 2,929,058 bytes. The
+1,441,332-byte difference is one byte larger than measured, due to MP3 padding. The
+frame displacement matches the local evidence exactly. A single shortened segment
+and its location remain explicit construction assumptions. The original opposite-
+direction experiment remains in DynamicAdPlaybackTest and the legacy reconnect notes.
+
+The production player initially seeks to 70 seconds, plays 17 seconds, then is
+recreated at 87 seconds. That declared seek avoids a minute of otherwise unused
+setup audio; it does not preload cache files or bypass production loading. Response
+throttling applies after 512,000 bytes of every GET, including ranged GETs. The cache
+check verifies all retained bytes against A and measures the contiguous span covering
+the resumed frame offset, allowing an earlier gap caused by the seek. The HTTP check
+also verifies that releasing a throttled ranged response delivers its complete body.
+
+A four-second reverse-direction trial passed all audio controls and failed only at
+mixed content (35 A windows, nine B windows), but it is not the final candidate: the
+measured magnitude could interact differently with buffering, ranges and end handling.
+Its service restart case timed out before the saved-position oracle; pause/resume
+passed. The timeout evidence is retained separately and is not a reproduction result.
+The minute-scale case is validated independently below.
+
+The first full-magnitude audio run passed stable A, empty-cache B and completed A
+playback. Stable/download error stayed below 4 ms; empty-cache B stayed below 117 ms.
+Retained-cache playback failed only the consistency assertion: 33 A windows before
+and 14 B windows after the measured 2,295,222-byte boundary (95.634286 seconds).
+Maximum errors against whole A and B were 60.056698 and 60.054705 seconds respectively.
+The retained A spans were [0, 1884) and [1679558, 2295222); fresh B supplied the missing
+ranges. The B request after the boundary advertised A's old end, but the server returned
+a coherent range bounded by B's length. Request shapes are recorded, not asserted.
+
+The consumed transition at byte 2,295,222 is an MP3 frame start; the earlier two
+span boundaries are not. Independent FFmpeg decoding of A, B and the exact synthetic
+A/B span composition completed with exit code zero
+and no decoder errors. This supports interpreting the steady A-before/B-after windows
+as a content transition, rather than a decoder setup failure. It does not rule out
+all possible audible artifacts at the join.
+
+The initial minute-scale service restart run exposed a synchronization flaw: the test
+read the saved database position at 20:45:08.535 while the old service's session was
+not released until 20:45:09.095. The resumption callback later selected a newer saved
+position, invalidating the test's snapshot. Shutdown now waits for main-thread idle
+and drains DBWriter's existing FIFO test barrier with a bounded wait before reading
+the position. The exact 800 ms assertion remains unchanged. Pause/resume passed.
+
+Review snapshot `9ee866d5e3345c64edf9492fb35889f77b8ed49f` contains the full-magnitude
+candidate. Debug and instrumentation builds and focused Checkstyle passed. Removing
+the generated review assets before building reproduced exactly two packaged files,
+byte-identical to an independent generation. No MP3 binaries are tracked in the tip.
+The rich branch also retains the original fixture generation for legacy experiments.
+
+Both synchronized service cases passed. Restart saved 17,751 ms and restored 16,951 ms,
+exactly the production 800 ms rewind. The test's short-pause bound and exact assertion
+were retained. The pause/resume case remains a same-episode progress smoke test, not
+a decoded-audio check. No production source was changed in the review branch.
+
+The final repeat from that review APK again failed only the mixed-content assertion,
+with 34 A windows before the boundary and 18 B windows after it. Maximum whole-layout
+errors were 60.056719 seconds against A and 60.054705 against B. All setup, coverage and
+output-discard checks passed. Raw runs remain in the local validation directory as
+`measured-audio`, `measured-server`, `measured-review-service` and
+`measured-review-mixed`; earlier service failures are retained separately. No PR #8441
+code has been inspected, and this remains a review candidate rather than a frozen test.
