@@ -1,13 +1,21 @@
 # Compare Wi-Fi control with a cellular-hotspot interruption
 
 Use the existing diagnostic APK; no update is needed. Save its detailed log outside
-Git, then run these in your Windows clone (adjust the local log filename):
+Git, then run these in Windows Command Prompt in your clone (adjust the local log filename):
 
-```powershell
+```bat
 git pull --ff-only
-py -3 scripts/downloadEpisode.py --trace-log "$HOME/Downloads/full-logs (1).txt" --network-test control --half --delay 60 --overlap --output "$HOME/Downloads/wifi-control.mp3"
-py -3 scripts/downloadEpisode.py --trace-log "$HOME/Downloads/full-logs (1).txt" --network-test switch --half --delay 60 --overlap --output "$HOME/Downloads/wifi-cell.mp3"
+py -3 scripts/downloadEpisode.py --trace-log "%USERPROFILE%\Downloads\full-logs (1).txt" --prompt-feed-url --network-test control --half --delay 60 --overlap --output "%USERPROFILE%\Downloads\wifi-control-feed.mp3"
+py -3 scripts/downloadEpisode.py --trace-log "%USERPROFILE%\Downloads\full-logs (1).txt" --prompt-feed-url --network-test switch --half --delay 60 --overlap --output "%USERPROFILE%\Downloads\wifi-cell-feed.mp3"
 ```
+
+At the hidden prompt, paste the **RSS subscription URL**. The episode audio URL is
+read separately from the local diagnostic log. `--prompt-feed-url` adds one explicit
+local RSS GET, saves its XML body as `feed.xml` plus response headers/routes/times,
+and records matching `itunes:duration`. There is no feed fetch without this flag or
+`--feed-url`; no feed address is guessed. An absent/ambiguous enclosure match stops
+before audio requests and retains the RSS evidence. Invalid/missing duration stays
+explicitly unmeasured. RSS is capped at 10 MB. New output names preserve earlier runs.
 
 Start **each** command on Wi-Fi. The control pauses halfway, waits at least 60 seconds,
 and asks you to stay on the same network before pressing Enter. For the second run,
@@ -55,6 +63,55 @@ sessions cannot be restored. These files can expose a changed representation or 
 decoded/listened to for a skip; successful capture alone is not a reproduction verdict.
 
 Local fixture checks: `py -3 scripts/testDownloadEpisode.py`.
+
+
+## Compare existing captures offline
+
+No redownload is needed to analyze earlier captures. This command writes a new private
+JSON comparison, including feed metadata when captured:
+
+```bat
+py -3 scripts/analyzeEpisodeCapture.py "%USERPROFILE%\Downloads\wifi-control-feed.mp3.capture" "%USERPROFILE%\Downloads\wifi-cell-feed.mp3.capture" --decode --output "%USERPROFILE%\Downloads\episode-comparison.json"
+```
+
+Python alone reports HTTP evidence, saved sizes/hashes, feed duration and raw/parsed
+ID3v2.3/v2.4 TLEN and seek-header checks. Install/use `ffprobe` and `ffmpeg` on your local PATH for audio
+measurements; no packages are installed automatically. Missing tools produce explicit
+"not measured" fields. `--decode` can take minutes and processes only local files.
+The analyzer forces the MP3 demuxer and file/pipe protocols, never fetching URLs.
+For old captures, `--feed-snapshot "C:\path\feed.xml"` accepts an existing local RSS
+snapshot; it matches the enclosure hash and never fetches the feed. An enclosure URL
+can itself change over time; a failed exact match is not silently replaced by a title guess.
+
+The comparison separates:
+
+- RSS XML `itunes:duration` raw text and parsed seconds; this is **not an HTTP header**
+  and is not the player's displayed duration.
+- TLEN raw frame bytes, text and milliseconds, including encoding-only empty values.
+  Unsupported ID3 versions/flags are reported rather than treated as absent TLEN.
+- Xing/Info/VBRI signatures at expected offsets in the first plausible MPEG layer III
+  frame; this is bounded header inspection, not validation of an entire seek table.
+- `ffprobe` duration estimate, codec/sample rate/channels/bitrate, and summed demuxed
+  packet durations/count/bytes. Packet durations have decimal rounding and are not a
+  proof that every original MPEG frame survived. The bitrate is not a full CBR audit.
+- With `--decode`, actual emitted PCM sample duration after mono 48 kHz conversion,
+  decoder exit status/error excerpt, and differences from feed duration and TLEN.
+  Decoder errors or a truncated input can still produce some samples; that duration
+  must not be mistaken for a complete original program.
+- Declared HTTP length/ranges, saved bytes and MB (1 MB = 1,048,576 bytes), recomputed
+  SHA-256 hashes, UA, route/session URL hashes, validators and capture timing. Exact
+  routes and all response headers remain in the private capture manifest.
+- Byte equality between candidate files and the existing separate-overlap comparisons.
+  Equal hashes prove those saved bytes match, not that earlier/later provider states match.
+
+Program cross-correlation/alignment, missing words/end-content completeness, and actual
+phone playback behavior remain **not measured**. Reconstructed files retain splice
+provenance; a duration change alone does not prove a skip. Keep reports, RSS, logs and
+audio private and outside Git. Existing report files are never overwritten.
+
+Header inspection references the offsets used in
+[FFmpeg's MP3 demuxer](https://github.com/FFmpeg/FFmpeg/blob/master/libavformat/mp3dec.c).
+Run synthetic checks with `py -3 scripts/testAnalyzeEpisodeCapture.py`.
 
 ## Legacy public RSS capture
 

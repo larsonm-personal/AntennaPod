@@ -60,6 +60,24 @@ def enclosure(opener):
     return urllib.parse.urljoin(FEED_URL, audio[0].get("url")), published
 
 
+def feed_episode(xml, url):
+    matches = [item for item in ET.fromstring(xml).findall("./channel/item")
+               if any(entry.get("url") == url for entry in item.findall("enclosure"))]
+    if len(matches) != 1:
+        return {"status": "enclosure match missing or ambiguous", "matches": len(matches)}
+    raw = matches[0].findtext("{http://www.itunes.com/dtds/podcast-1.0.dtd}duration")
+    result = {"status": "matched enclosure", "itunes_duration_raw": raw, "itunes_duration_seconds": None}
+    if raw:
+        parts = raw.strip().split(":")
+        if (1 <= len(parts) <= 3 and all(part.isdecimal() for part in parts)
+                and all(int(part) < 60 for part in parts[1:])):
+            result["itunes_duration_seconds"] = sum(int(part) * 60 ** index
+                                                   for index, part in enumerate(reversed(parts)))
+    result["duration_status"] = ("parsed" if result["itunes_duration_seconds"] is not None else
+                                 "missing" if raw is None else "invalid")
+    return result
+
+
 class Redirects(urllib.request.HTTPRedirectHandler):
     def __init__(self, private=False):
         self.observations = []
@@ -116,19 +134,20 @@ def staged(opener, redirects, url, published, output, args):
         manifest["source_url"] = url
         manifest["limitations"] = "Synthetic interruption; no automatic network verification or audible-skip verdict"
 
-    def request(target, method="GET", byte_range=None):
+    def request(target, method="GET", byte_range=None, feed=False):
         redirects.observations.clear()
         redirects.requests.clear()
         headers = {"Accept-Encoding": "identity", "User-Agent":
                    next(value for name, value in opener.addheaders if name.lower() == "user-agent")}
         if args.network_test and method == "HEAD":
             headers["Accept-Encoding"] = "gzip"
-        if method == "GET":
+        if method == "GET" and not feed:
             headers["Icy-MetaData"] = "1"
         if byte_range:
             headers["Range"] = "bytes=%d-%d" % byte_range
         record = {"method": method, "requested_route": route(target), "request_headers": headers,
                   "time_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        record["role"] = "rss" if feed else "audio"
         manifest["requests"].append(record)
         if args.network_test:
             record["requested_url"] = target
@@ -206,6 +225,15 @@ def staged(opener, redirects, url, published, output, args):
         return total
 
     try:
+        if args.feed_url:
+            response, feed = request(args.feed_url, feed=True)
+            with response:
+                if response.status != 200:
+                    raise ValueError("RSS must return HTTP 200")
+                save(response, feed, "feed.xml", cap=10 * 1024 * 1024)
+            manifest["feed"] = {"file": "feed.xml", **feed_episode((folder / "feed.xml").read_bytes(), url)}
+            if manifest["feed"]["status"] != "matched enclosure":
+                raise ValueError("RSS enclosure match missing or ambiguous; evidence preserved")
         with request(url, "HEAD")[0] as response:
             pinned = response.url
         response, first = request(pinned)
@@ -282,6 +310,8 @@ def main():
     parser = argparse.ArgumentParser(description="Download episode audio and local response metadata.")
     parser.add_argument("url", nargs="?", help="Optional direct episode audio URL; bypasses RSS selection")
     parser.add_argument("-o", "--output", type=pathlib.Path, help="Output path (default: your Downloads folder)")
+    parser.add_argument("--feed-url", help="Explicit private RSS feed URL to capture locally (network-test only)")
+    parser.add_argument("--prompt-feed-url", action="store_true", help="Hidden local prompt for RSS feed URL")
     parser.add_argument("--trace-log", type=pathlib.Path,
                         help="Read a single original episode URL from a PRIVATE diagnostic log locally")
     parser.add_argument("--prompt-url", action="store_true", help="Privately prompt for an episode audio URL")
@@ -317,6 +347,18 @@ def main():
         args.staged = True
         if not args.url:
             parser.error("Network tests require an episode audio URL or --prompt-url.")
+    if args.prompt_feed_url:
+        if args.feed_url:
+            parser.error("Choose either --feed-url or --prompt-feed-url.")
+        args.feed_url = getpass.getpass("RSS SUBSCRIPTION URL (hidden, not the episode audio URL): ").strip()
+        if not args.feed_url:
+            parser.error("A feed URL is required.")
+    if args.feed_url:
+        if not args.network_test:
+            parser.error("Feed capture requires --network-test and an explicit episode URL input.")
+        feed_parts = urllib.parse.urlsplit(args.feed_url)
+        if feed_parts.scheme not in ("http", "https") or not feed_parts.hostname or feed_parts.username or feed_parts.password:
+            parser.error("Use an HTTP(S) feed URL without embedded credentials.")
     if args.half and not args.staged:
         parser.error("--half requires staged capture.")
     if not 0 <= args.delay <= 86400 or not 1 <= args.prefix_bytes <= 64 * 1024 * 1024:

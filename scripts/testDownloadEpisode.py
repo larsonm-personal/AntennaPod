@@ -48,6 +48,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b"private error evidence")
             return
+        if self.path == "/feed":
+            if mode == "feed403":
+                self.send_response(403)
+                self.end_headers()
+                self.wfile.write(b"feed denied")
+                return
+            url = f"http://127.0.0.1:{self.server.server_port}/entry"
+            if mode == "feed_missing":
+                url += "-different"
+            duration = "invalid" if mode == "feed_invalid" else "1:02:03"
+            item = f'<item><enclosure url="{url}"/><itunes:duration>{duration}</itunes:duration></item>'
+            xml = ('<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"><channel>' + item
+                   + (item if mode == "feed_ambiguous" else "") + '</channel></rss>').encode()
+            if mode == "feed_bad_xml":
+                xml = b"<broken"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(xml)))
+            self.end_headers()
+            self.wfile.write(xml)
+            return
         requested_range = self.headers.get("Range")
         if not requested_range and self.path.startswith("/pinned"):
             self.redirect("/get-target?secret=PRIVATE")
@@ -169,6 +189,32 @@ def run_case(directory, server):
     print("PASS:", mode, network or "legacy")
 
 
+def feed_cases(directory, server):
+    global mode, network
+    network = "control"
+    for mode in ("feed_ok", "feed_invalid", "feed_missing", "feed_ambiguous", "feed403", "feed_bad_xml"):
+        requests.clear()
+        output = pathlib.Path(directory) / (mode + ".mp3")
+        sys.argv = ["capture", f"http://127.0.0.1:{server.server_port}/entry", "--network-test", "control",
+                    "--half", "--delay", "0", "--prompt-feed-url", "--output", str(output)]
+        with mock.patch.object(capture.getpass, "getpass", return_value=
+                               f"http://127.0.0.1:{server.server_port}/feed"), \
+                mock.patch("builtins.input", return_value=""), contextlib.redirect_stdout(io.StringIO()):
+            code = capture.main()
+        folder = output.with_suffix(".mp3.capture")
+        data = json.loads((folder / "manifest.json").read_text())
+        assert requests[0][:2] == ("GET", "/feed")
+        assert data["requests"][0]["role"] == "rss"
+        if mode in ("feed_ok", "feed_invalid"):
+            assert code == 0
+            assert data["feed"]["itunes_duration_seconds"] == (3723 if mode == "feed_ok" else None)
+            assert data["feed"]["duration_status"] == ("parsed" if mode == "feed_ok" else "invalid")
+        else:
+            assert code == 1 and len(requests) == 1
+        assert (folder / ("error-1.bin" if mode == "feed403" else "feed.xml")).exists()
+        print("PASS:", mode)
+
+
 def streaming_redirect_case():
     reached_destination = threading.Event()
     release = threading.Event()
@@ -247,6 +293,7 @@ if __name__ == "__main__":
             for network in ("control", "switch"):
                 for mode in ("stable", "changed", "head403get403", "third_overlap", "ignored", "truncated", "get403"):
                     run_case(directory, server)
+            feed_cases(directory, server)
     finally:
         server.shutdown()
         server.server_close()
