@@ -1,4 +1,60 @@
-# Capture the reported RSS episode locally
+# Compare Wi-Fi control with a cellular-hotspot interruption
+
+Use the existing diagnostic APK; no update is needed. Save its detailed log outside
+Git, then run these in your Windows clone (adjust the local log filename):
+
+```powershell
+git pull --ff-only
+py -3 scripts/downloadEpisode.py --trace-log "$HOME/Downloads/full-logs (1).txt" --network-test control --half --delay 60 --overlap --output "$HOME/Downloads/wifi-control.mp3"
+py -3 scripts/downloadEpisode.py --trace-log "$HOME/Downloads/full-logs (1).txt" --network-test switch --half --delay 60 --overlap --output "$HOME/Downloads/wifi-cell.mp3"
+```
+
+Start **each** command on Wi-Fi. The control pauses halfway, waits at least 60 seconds,
+and asks you to stay on the same network before pressing Enter. For the second run,
+wait for the prompt, connect the PC to your phone's **cellular** hotspot, then press
+Enter. Disable the phone's Wi-Fi sharing and check Ethernet/VPN routes yourself;
+the script neither changes nor verifies networks. Keep the control pause roughly as
+long as the switch pause; actual pause times are recorded. Ctrl+C cancels and preserves
+evidence. Run this pair once initially, rather than polling until ads change.
+
+`--trace-log` reads the original episode audio URL **locally**, never uploads the log,
+and refuses ambiguous logs containing multiple episode URLs. Alternatively use
+`--prompt-url` for hidden local audio-URL entry, or the existing positional URL argument
+(which can leave the URL in shell history). Supply an audio URL, not a subscription
+RSS URL. Existing output directories are never overwritten.
+
+The network modes use the observed diagnostic-app User-Agent `AntennaPod/3.13.0-beta1`,
+HEAD with `Accept-Encoding: gzip`, and GET with `Accept-Encoding: identity` and
+`Icy-MetaData: 1`. They resolve once by HEAD, pin its final URL, read half of the initial
+GET length, close, pause, then request the remaining byte interval from that same URL
+without If-Range. They do not re-resolve the original URL after switching networks.
+The supplied clean log showed this URL reuse on seeks, not a failed network retry;
+the halfway interruption is our experimental trigger, not an observed failure replay.
+These modes stop on any HTTP 403 without trying another identity or route. Other
+GET errors and transport failures are terminal too.
+
+**The `.mp3.capture` folders are private:** manifests now retain exact URLs, redirect
+Locations, duplicate response headers, outgoing urllib request headers, UTC times,
+body byte counts/hashes, pause duration and capped error/redirect bodies. Keep both
+folders and the original log outside Git; share only privately. Audio bodies are
+bounded at 256 MiB, error/redirect bodies at 64 KiB, and optional overlap at 128 KiB.
+There is one HEAD resolution, two audio requests and one optional overlap request per
+run, plus bounded normal redirects. The original GET is intentionally cut halfway;
+its unread remainder is not captured. A valid 206 creates an explicitly reconstructed
+file; ignored Range (200), shorter totals and errors keep their existing distinct
+handling described below. Overlap is a separate later request and may be variant C;
+its comparisons do not prove what the actual resumed response contained before the join.
+
+Python still differs from Android: HTTP/TLS implementation, connection reuse, proxy
+settings and automatically added headers (including urllib's Connection: close) are
+not identical. Host and urllib-prepared headers are recorded, not a wire capture.
+There is no cookie jar or credential replay. Historical ads, app cache and expired
+sessions cannot be restored. These files can expose a changed representation or be
+decoded/listened to for a skip; successful capture alone is not a reproduction verdict.
+
+Local fixture checks: `py -3 scripts/testDownloadEpisode.py`.
+
+## Legacy public RSS capture
 
 Requires Python 3.8 or newer; no extra packages. In your existing Windows clone:
 
@@ -29,7 +85,7 @@ content identity. Keep audio and metadata local; do not commit them.
 This collects input for investigation; it does **not** reproduce AntennaPod playback.
 Local HTTP fixtures validate RSS selection, mismatches/ambiguity, redirects, errors,
 incomplete downloads and overwrite protection. Live Audioboom RSS access remains
-unverified because cloud access was blocked. The script does not impersonate AntennaPod.
+unverified because cloud access was blocked. The legacy modes retain the Python User-Agent.
 
 ## Staged capture (opt-in)
 
@@ -76,6 +132,6 @@ Neither changed headers nor a constructed file is by itself a verdict of an audi
 This models a new load-error retry: Media3 1.10 resets its local ETag on each `load()`
 invocation, retaining the consumed offset. It can send If-Range on reopenings within
 one invocation, which this mode does not model. Python networking and an exact byte
-cut are approximations, not an actual AntennaPod run. Signed URLs are held in memory
+cut are approximations, not an actual AntennaPod run. In legacy staged mode, signed URLs are held in memory
 only; persisted routes are redacted/hashes. Keep the whole capture directory private.
 Run local staged fixtures with `py -3 scripts/testDownloadEpisode.py`.

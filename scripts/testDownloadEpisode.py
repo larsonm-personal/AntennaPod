@@ -6,12 +6,14 @@ import pathlib
 import sys
 import tempfile
 import threading
+from unittest import mock
 
 import downloadEpisode as capture
 
 
 requests = []
 mode = "stable"
+network = None
 original = b"abcdefghijklmnop"
 changed = b"ABCDEFGHIJKLMNOP"
 
@@ -39,10 +41,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         self.record()
-        assert self.headers.get("User-Agent") == "Python-urllib/" + capture.urllib.request.__version__
-        if mode == "head403get403":
+        assert self.headers.get("User-Agent") == ("AntennaPod/3.13.0-beta1" if network else
+                                                  "Python-urllib/" + capture.urllib.request.__version__)
+        if mode in ("head403get403", "get403"):
             self.send_response(403)
             self.end_headers()
+            self.wfile.write(b"private error evidence")
             return
         requested_range = self.headers.get("Range")
         if not requested_range and self.path.startswith("/pinned"):
@@ -69,6 +73,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if status == 206:
             first = start + (1 if mode == "wrong" else 0)
             self.send_header("Content-Range", f"bytes {first}-{end}/{total}")
+        self.send_header("X-Fixture", "one")
+        self.send_header("X-Fixture", "two")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("ETag", '"B"' if requested_range and mode in ("changed", "shorter") else '"A"')
         self.end_headers()
@@ -77,18 +83,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def run_case(directory, server):
     requests.clear()
-    output = pathlib.Path(directory) / (mode + ".mp3")
+    output = pathlib.Path(directory) / (mode + (network or "") + ".mp3")
     sys.argv = ["capture", f"http://127.0.0.1:{server.server_port}/entry", "-o", str(output),
                 "--staged", "--delay", "0", "--prefix-bytes", "8"]
     if mode in ("stable", "changed", "third_overlap"):
         sys.argv.append("--overlap")
-    with contextlib.redirect_stdout(io.StringIO()) as log:
+    if network:
+        sys.argv.extend(["--network-test", network, "--half"])
+        sys.argv.pop(1)
+        log_path = pathlib.Path(directory) / "private-log.txt"
+        log_path.write_text('123 456 resolver.original=' + json.dumps(
+            f"http://127.0.0.1:{server.server_port}/entry") + "\n", encoding="utf-8")
+        sys.argv.extend(["--trace-log", str(log_path)])
+    with contextlib.redirect_stdout(io.StringIO()) as log, mock.patch("builtins.input", return_value="") as prompt:
         code = capture.main()
+    if network:
+        assert prompt.call_count == (0 if mode in ("head403get403", "get403") else 1)
+        if prompt.called:
+            assert ("SAME" if network == "control" else "CELLULAR") in prompt.call_args.args[0]
     folder = output.with_suffix(".mp3.capture")
     data = json.loads((folder / "manifest.json").read_text())
-    assert "PRIVATE" not in json.dumps(data) + log.getvalue()
+    assert "secret=PRIVATE" not in log.getvalue()
+    if network:
+        assert data["network_test"] == network
+        assert data["requests"][0]["redirects"][0]["location"] == "/pinned?secret=PRIVATE"
+        assert data["requests"][0]["request_headers"]["Accept-Encoding"] == "gzip"
+        if mode == "head403get403":
+            assert len(requests) == 2 and len(data["requests"]) == 1
+            assert data["requests"][0]["status"] == 403
+            assert code == 1
+            print("PASS:", mode, network)
+            return
+        elif mode == "get403":
+            assert code == 1 and len(requests) == 3
+            assert (folder / data["requests"][1]["error_file"]).read_bytes() == b"private error evidence"
+            assert prompt.call_count == 0
+            print("PASS:", mode, network)
+            return
+        else:
+            assert [v for k, v in data["requests"][1]["response_headers"] if k == "X-Fixture"] == ["one", "two"]
+            assert data["requests"][1]["body_finished_utc"]
+            assert data["pause_seconds"] >= 0
+            outgoing = data["requests"][1]["outgoing_hops"]
+            assert len(outgoing) == 2
+            assert all(hop["method"] == "GET" for hop in outgoing)
+            assert any(name.lower() == "host" for name, value in outgoing[0]["headers"])
+    else:
+        assert "PRIVATE" not in json.dumps(data)
     assert [request[0] for request in requests[:2]] == ["HEAD", "HEAD"], requests
-    assert all(record["request_headers"]["User-Agent"] == "Python-urllib/" + capture.urllib.request.__version__
+    assert all(record["request_headers"]["User-Agent"] == ("AntennaPod/3.13.0-beta1" if network else
+                   "Python-urllib/" + capture.urllib.request.__version__)
                for record in data["requests"])
     if mode in ("head403", "head403get403"):
         assert data["requests"][0]["status"] == 403
@@ -122,7 +166,29 @@ def run_case(directory, server):
         assert code == 1 and not (folder / "reconstructed.mp3").exists(), log.getvalue()
         if mode in ("wrong", "truncated"):
             assert (folder / "suffix.bin").exists()
-    print("PASS:", mode)
+    print("PASS:", mode, network or "legacy")
+
+
+def input_cases(directory):
+    log_path = pathlib.Path(directory) / "ambiguous.txt"
+    log_path.write_text('1 2 resolver.original="https://example.invalid/private-one"\n'
+                        '1 2 resolver.original="https://example.invalid/private-two"\n', encoding="utf-8")
+    sys.argv = ["capture", "--trace-log", str(log_path), "--network-test", "switch"]
+    with mock.patch.object(capture.urllib.request, "build_opener") as opener, contextlib.redirect_stderr(io.StringIO()):
+        try:
+            capture.main()
+            raise AssertionError("Ambiguous log accepted")
+        except SystemExit as error:
+            assert error.code == 2
+        opener.assert_not_called()
+    sys.argv = ["capture", "--prompt-url", "--network-test", "control"]
+    with mock.patch.object(capture.getpass, "getpass", return_value=""), contextlib.redirect_stderr(io.StringIO()):
+        try:
+            capture.main()
+            raise AssertionError("Empty private prompt accepted")
+        except SystemExit as error:
+            assert error.code == 2
+    print("PASS: ambiguous log and empty private prompt stop before requests")
 
 
 if __name__ == "__main__":
@@ -130,9 +196,13 @@ if __name__ == "__main__":
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         with tempfile.TemporaryDirectory() as directory:
+            input_cases(directory)
             for mode in ("stable", "changed", "shorter", "ignored", "wrong", "truncated", "416",
                          "head403", "head403get403", "third_overlap"):
                 run_case(directory, server)
+            for network in ("control", "switch"):
+                for mode in ("stable", "changed", "head403get403", "third_overlap", "ignored", "truncated", "get403"):
+                    run_case(directory, server)
     finally:
         server.shutdown()
         server.server_close()
