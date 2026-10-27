@@ -237,3 +237,8 @@ validators do not prove the same content either. This monitor cannot detect an a
 skip without a later content capture. Keep the journal private and out of Git.
 
 Local checks: `py -3 scripts/testWatchEpisodeRoute.py`.
+
+
+For the next evidence-driven test of pinned versus freshly resolved URLs, see
+[server characterization](serverCharacterization.md). It samples bounded, identical
+byte windows and keeps candidate server behaviors separate from the synthetic skip test.
