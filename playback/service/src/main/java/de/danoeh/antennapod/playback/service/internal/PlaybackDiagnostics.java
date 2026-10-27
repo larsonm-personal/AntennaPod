@@ -32,12 +32,31 @@ final class PlaybackDiagnostics implements DataSource {
     private long request;
     private long bytes;
     private long reported;
+    private long inputBytes;
     private final boolean authorizationPresent;
 
     PlaybackDiagnostics(DefaultHttpDataSource upstream, String source, boolean authorizationPresent) {
         this.upstream = upstream;
         this.source = source;
         this.authorizationPresent = authorizationPresent;
+        upstream.addTransferListener(new TransferListener() {
+            @Override
+            public void onTransferInitializing(DataSource source, DataSpec spec, boolean network) {
+            }
+
+            @Override
+            public void onTransferStart(DataSource source, DataSpec spec, boolean network) {
+            }
+
+            @Override
+            public void onBytesTransferred(DataSource source, DataSpec spec, boolean network, int count) {
+                inputBytes += count;
+            }
+
+            @Override
+            public void onTransferEnd(DataSource source, DataSpec spec, boolean network) {
+            }
+        });
     }
 
     private void record(PlaybackTrace.Event event, long... values) {
@@ -50,11 +69,19 @@ final class PlaybackDiagnostics implements DataSource {
     public long open(DataSpec spec) throws IOException {
         request = PlaybackTrace.nextRequest();
         bytes = 0;
+        inputBytes = 0;
         reported = 0;
         record(PlaybackTrace.Event.OPEN, request, PlaybackTrace.identity(spec.uri.toString()),
-                spec.httpMethod, spec.position, spec.length);
+                spec.httpMethod, spec.position, spec.length, PlaybackTrace.identity(source));
         if (PlaybackTrace.matches(source)) {
+            PlaybackTrace.detail("get." + request + ".source", source);
             PlaybackTrace.detail("get." + request + ".url", spec.uri.toString());
+            for (Map.Entry<String, String> header : spec.httpRequestHeaders.entrySet()) {
+                String name = header.getKey();
+                PlaybackTrace.detail("get." + request + ".dataSpecHeader." + name,
+                        name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie")
+                                ? "[present]" : header.getValue());
+            }
             PlaybackTrace.detail("get." + request + ".User-Agent", UserAgentInterceptor.USER_AGENT);
             PlaybackTrace.detail("get." + request + ".Range",
                     HttpUtil.buildRangeRequestHeader(spec.position, spec.length));
@@ -71,14 +98,16 @@ final class PlaybackDiagnostics implements DataSource {
         }
         try {
             long length = upstream.open(spec);
+            record(PlaybackTrace.Event.INPUT, request, inputBytes, bytes);
             record(PlaybackTrace.Event.RESPONSE, request, upstream.getResponseCode(), length,
                     PlaybackTrace.identity(String.valueOf(upstream.getUri())),
                     PlaybackTrace.identity(header("ETag")), PlaybackTrace.identity(header("Last-Modified")));
             if (PlaybackTrace.matches(source)) {
                 PlaybackTrace.detail("get." + request + ".finalUrl", String.valueOf(upstream.getUri()));
-                for (String name : new String[]{"Content-Length", "Content-Range", "ETag", "Last-Modified",
-                        "Content-Type", "Content-Encoding", "Accept-Ranges"}) {
-                    PlaybackTrace.detail("get." + request + ".response." + name, header(name));
+                for (Map.Entry<String, List<String>> header : upstream.getResponseHeaders().entrySet()) {
+                    PlaybackTrace.detail("get." + request + ".response." + header.getKey(),
+                            "Set-Cookie".equalsIgnoreCase(header.getKey())
+                                    ? "[present]" : header.getValue().toString());
                 }
             }
             String range = header("Content-Range");
@@ -99,7 +128,21 @@ final class PlaybackDiagnostics implements DataSource {
         } catch (IOException error) {
             record(PlaybackTrace.Event.FAILURE, request,
                     error instanceof HttpDataSource.InvalidResponseCodeException
-                            ? ((HttpDataSource.InvalidResponseCodeException) error).responseCode : -1, bytes);
+                            ? ((HttpDataSource.InvalidResponseCodeException) error).responseCode : -1,
+                    bytes, inputBytes);
+            if (PlaybackTrace.matches(source)) {
+                PlaybackTrace.detail("get." + request + ".errorClass", error.getClass().getName());
+                if (error instanceof HttpDataSource.InvalidResponseCodeException) {
+                    HttpDataSource.InvalidResponseCodeException response =
+                            (HttpDataSource.InvalidResponseCodeException) error;
+                    PlaybackTrace.detail("get." + request + ".errorResponseUrl", String.valueOf(upstream.getUri()));
+                    for (Map.Entry<String, List<String>> header : response.headerFields.entrySet()) {
+                        PlaybackTrace.detail("get." + request + ".errorResponse." + header.getKey(),
+                                "Set-Cookie".equalsIgnoreCase(header.getKey())
+                                        ? "[present]" : header.getValue().toString());
+                    }
+                }
+            }
             throw error;
         }
     }
@@ -121,12 +164,12 @@ final class PlaybackDiagnostics implements DataSource {
                 bytes += count;
             }
             if (count == -1 || bytes - reported >= 1024 * 1024) {
-                record(PlaybackTrace.Event.READ, request, bytes, count == -1 ? 1 : 0);
+                record(PlaybackTrace.Event.READ, request, bytes, count == -1 ? 1 : 0, inputBytes);
                 reported = bytes;
             }
             return count;
         } catch (IOException error) {
-            record(PlaybackTrace.Event.FAILURE, request, -1, bytes);
+            record(PlaybackTrace.Event.FAILURE, request, -1, bytes, inputBytes);
             throw error;
         }
     }
@@ -136,7 +179,7 @@ final class PlaybackDiagnostics implements DataSource {
         try {
             upstream.close();
         } finally {
-            record(PlaybackTrace.Event.CLOSE, request, bytes);
+            record(PlaybackTrace.Event.CLOSE, request, bytes, inputBytes);
         }
     }
 

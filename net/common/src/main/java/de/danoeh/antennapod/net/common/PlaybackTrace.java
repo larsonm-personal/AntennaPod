@@ -22,7 +22,7 @@ import java.util.Set;
 
 public final class PlaybackTrace {
     public enum Event { START, STOP, SOURCE, HEAD, HEAD_FAILURE, RESOLVE, OPEN, RESPONSE, RANGE,
-        READ, CLOSE, FAILURE, CACHE, CACHE_IGNORED, POSITION, DISCONTINUITY, STATE, PLAYER_ERROR }
+        READ, INPUT, CLOSE, FAILURE, CACHE, CACHE_IGNORED, POSITION, DISCONTINUITY, STATE, PLAYER_ERROR }
 
     private static final Set<Long> sources = new HashSet<>();
     private static byte[] salt = new byte[32];
@@ -52,22 +52,27 @@ public final class PlaybackTrace {
             return chain.proceed(chain.request());
         }
         long request = nextRequest();
+        detail("head." + request + ".source", tag.source);
         detail("head." + request + ".url", chain.request().url().toString());
         detail("head." + request + ".method", chain.request().method());
-        for (String name : new String[]{"User-Agent", "Accept-Encoding", "Range", "If-Range"}) {
-            detail("head." + request + "." + name, chain.request().header(name));
+        for (String name : chain.request().headers().names()) {
+            detail("head." + request + ".request." + name,
+                    name.equalsIgnoreCase("Authorization") || name.equalsIgnoreCase("Cookie")
+                            ? "[present]" : chain.request().header(name));
         }
-        for (String name : new String[]{"Authorization", "Cookie"}) {
-            detail("head." + request + "." + name + "Present",
-                    Boolean.toString(chain.request().header(name) != null));
+        try {
+            Response response = chain.proceed(chain.request());
+            record(Event.HEAD, request, identity(response.request().url().toString()), response.code());
+            for (String name : response.headers().names()) {
+                detail("head." + request + ".response." + name,
+                        name.equalsIgnoreCase("Set-Cookie") ? "[present]" : response.header(name));
+            }
+            return response;
+        } catch (IOException error) {
+            record(Event.HEAD_FAILURE, request, identity(tag.source));
+            detail("head." + request + ".errorClass", error.getClass().getName());
+            throw error;
         }
-        Response response = chain.proceed(chain.request());
-        record(Event.HEAD, request, identity(response.request().url().toString()), response.code());
-        for (String name : new String[]{"Location", "Content-Length", "Content-Range", "ETag", "Last-Modified",
-                "Content-Type", "Accept-Ranges"}) {
-            detail("head." + request + ".response." + name, response.header(name));
-        }
-        return response;
     }
 
     private static synchronized void start() {

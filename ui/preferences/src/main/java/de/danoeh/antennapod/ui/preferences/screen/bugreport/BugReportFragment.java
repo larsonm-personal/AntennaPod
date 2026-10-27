@@ -28,6 +28,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import io.reactivex.rxjava3.core.Single;
+import io.reactivex.rxjava3.schedulers.Schedulers;
+import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
 
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
 import de.danoeh.antennapod.ui.common.AnimatedFragment;
@@ -43,6 +47,7 @@ public class BugReportFragment extends AnimatedFragment {
 
     private BugReportFragmentBinding viewBinding;
     private BugReportViewModel viewModel;
+    private static final AtomicBoolean diagnosticExportRunning = new AtomicBoolean();
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -173,7 +178,45 @@ public class BugReportFragment extends AnimatedFragment {
         builder.show();
     }
 
+    private void exportDiagnostics() {
+        if (!diagnosticExportRunning.compareAndSet(false, true)) {
+            return;
+        }
+        BugReportFragmentBinding exportingView = viewBinding;
+        String environment = viewModel.requireCurrentState().getEnvironmentInfoWithMarkup() + "\n\n";
+        Single.fromCallable(() -> {
+            File filename = new File(UserPreferences.getDataFolder(null), "full-logs.txt");
+            try (FileOutputStream output = new FileOutputStream(filename)) {
+                output.write(environment.getBytes(StandardCharsets.UTF_8));
+            }
+            PlaybackTrace.exportDetailed(filename);
+            return filename;
+        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(filename -> {
+            diagnosticExportRunning.set(false);
+            if (viewBinding != exportingView || !isAdded()) {
+                return;
+            }
+            try {
+                Uri uri = FileProvider.getUriForFile(requireContext(),
+                        getString(R.string.provider_authority), filename);
+                new ShareCompat.IntentBuilder(requireContext()).setType("text/*").addStream(uri)
+                        .setChooserTitle(R.string.share_file_label).startChooser();
+            } catch (Exception e) {
+                Snackbar.make(viewBinding.getRoot(), R.string.log_file_share_exception, Snackbar.LENGTH_LONG).show();
+            }
+        }, error -> {
+            diagnosticExportRunning.set(false);
+            if (viewBinding == exportingView && isAdded()) {
+                Snackbar.make(viewBinding.getRoot(), R.string.log_file_share_exception, Snackbar.LENGTH_LONG).show();
+            }
+        });
+    }
+
     private void exportLogcat() {
+        if (BuildConfig.DEBUG) {
+            exportDiagnostics();
+            return;
+        }
         try {
             File filename = new File(UserPreferences.getDataFolder(null), "full-logs.txt");
             try (FileOutputStream outputStream = new FileOutputStream(filename)) {
@@ -181,11 +224,7 @@ public class BugReportFragment extends AnimatedFragment {
                         .getBytes(StandardCharsets.UTF_8));
             }
             String cmd = "logcat -d -f " + filename.getAbsolutePath();
-            if (BuildConfig.DEBUG) {
-                PlaybackTrace.exportDetailed(filename);
-            } else {
-                Runtime.getRuntime().exec(cmd);
-            }
+            Runtime.getRuntime().exec(cmd);
 
             //share file
             try {
