@@ -2,6 +2,7 @@ package de.danoeh.antennapod;
 
 import android.app.Application;
 import android.util.Log;
+import de.danoeh.antennapod.net.common.PlaybackTrace;
 
 import com.google.android.material.color.DynamicColors;
 
@@ -15,6 +16,7 @@ public class PodcastApp extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        PlaybackTrace.initialize(getFilesDir());
         Thread.setDefaultUncaughtExceptionHandler(new CrashReportExceptionHandler());
         RxJavaErrorHandlerSetup.setupRxJavaErrorHandler();
 

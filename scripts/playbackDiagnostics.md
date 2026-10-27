@@ -8,26 +8,25 @@ contains its actual version. Subscriptions, settings, cookies and cache are sepa
 
 1. Subscribe to the private feed **on your phone** through the normal app UI.
    Do not send the URL to the development environment or put it in Git.
-2. Before selecting the episode for playback, open **Settings → Report bug → menu →
-   Start private playback trace**. Paste the exact subscribed feed URL or exact
-   episode audio URL into the local masked field. Matching is exact; if subscription
-   redirected, use the stored subscribed URL. A feed target traces that feed's episodes.
-3. Select and stream the episode normally. Note the approximate player position if
-   you hear a skip, and any deliberate seeks or network changes.
-4. Soon afterwards, choose **Settings → Report bug → menu → Stop private playback
-   trace**, then **Export detailed logs**. Share `full-logs.txt` privately here.
+2. Select and stream the episode normally. Tracing is automatic, including after app
+   restarts. No URL entry or start/stop step is needed.
+3. If you hear a skip, note the approximate player position and any deliberate seeks
+   or network changes. Soon afterwards choose **Settings → Report bug → menu →
+   Export detailed logs** and share `full-logs.txt` privately here.
 
-Detailed logs include actual URLs and may include unrelated normal app logs. Never
-commit or publish them. They stay on the phone until you share them; no automatic
-upload occurs. The new trace records selected playback only, including real request
-URLs and delivery headers. It records authorization/cookie presence for HEAD, not
-credential values. It does not dump arbitrary headers, bodies or exception messages.
-The existing logcat buffer is finite: export promptly after the event. Tracing stops
-if the app process dies; enable it again before selecting the target episode.
-
-No PC script is needed for this first step: the URL is entered as a local app parameter.
-No private feed requests are made from our servers. Existing Python capture scripts
-are not needed for this phone test. Any later script must accept the URL locally.
+Detailed logs contain actual URLs. Never commit or publish them. No automatic upload
+occurs, and no private feed requests are made from our servers. No PC script is needed.
+Authorization/cookie presence is logged, not credential values. Playback diagnostics
+are kept in eight rolling files of up to 1 MiB each in private app storage across
+process restarts. Oldest data is discarded at the limit; retention depends on request
+activity, not a guaranteed number of days. Position events are recorded every five
+seconds. At roughly 100 bytes per position event, these events alone use about
+1.7 MiB per day of continuous playback; requests, retries and state changes shorten
+that window. This is a size bound, not a promise of several days of history.
+Writes run on a bounded background queue; abrupt process termination can lose pending
+events, and storage/queue failures are reported to logcat. Individual lines above
+16,384 characters are explicitly truncated. Export promptly after a skip. Uninstalling or clearing app data deletes them.
+Updates with the same package/signature preserve subscriptions and retained logs.
 
 Look for the `PlaybackTrace` log tag. Events begin with milliseconds since trace start.
 Numeric source identities are session-salted, with real URLs logged separately to

@@ -4,7 +4,6 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
-import de.danoeh.antennapod.net.common.PlaybackTrace;
 import android.os.Bundle;
 import android.text.TextUtils;
 import de.danoeh.antennapod.net.common.HttpCredentialEncoder;
@@ -88,14 +87,6 @@ public class MediaItemAdapter {
             localPlaybackUri = playable.getLocalFileUrl();
         } else {
             localPlaybackUri = playable.getStreamUrl();
-        }
-        if (!forBrowse) {
-            String feedUrl = null;
-            if (playable instanceof FeedMedia && ((FeedMedia) playable).getItem() != null
-                    && ((FeedMedia) playable).getItem().getFeed() != null) {
-                feedUrl = ((FeedMedia) playable).getItem().getFeed().getDownloadUrl();
-            }
-            PlaybackTrace.select(playable.getStreamUrl(), feedUrl, localPlaybackUri, playable.localFileAvailable());
         }
         Bundle requestExtras = new Bundle();
         if (!playable.localFileAvailable() && playable instanceof FeedMedia) {

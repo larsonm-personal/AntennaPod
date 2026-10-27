@@ -16,6 +16,10 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import de.danoeh.antennapod.playback.service.internal.ExoPlayerUtils;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
 import de.danoeh.antennapod.net.common.PlaybackTrace;
+import de.danoeh.antennapod.playback.base.MediaItemAdapter;
+import de.danoeh.antennapod.model.feed.Feed;
+import de.danoeh.antennapod.model.feed.FeedItem;
+import de.danoeh.antennapod.model.feed.FeedMedia;
 import de.test.antennapod.util.service.download.HTTPBin;
 import org.apache.commons.io.IOUtils;
 import org.awaitility.Awaitility;
@@ -54,6 +58,7 @@ public class DynamicAdPlaybackTest {
     private File changed;
     private volatile long playerPosition;
     private String traceUrl;
+    private MediaItem subscriptionMedia;
 
     @Before
     public void setUp() throws Exception {
@@ -127,12 +132,19 @@ public class DynamicAdPlaybackTest {
 
     @Test
     public void privateTraceRecordsNetworkCacheAndPlayback() throws Exception {
-        traceUrl = server.getBaseUrl() + "/dynamic-ad/PRIVATE?token=SECRET&next=https%3A%2F%2Fprivate.invalid%2FSECRET";
-        PlaybackTrace.start(traceUrl);
+        traceUrl = server.getBaseUrl() + "/dynamic-ad/PRIVATE?token=SECRET&next=https%3A%2F%2Fprivate.invalid%2FSECRET"
+                + "&run=" + System.nanoTime();
+        Feed feed = new Feed(server.getBaseUrl() + "/feed", null, "Synthetic subscription");
+        FeedItem item = new FeedItem();
+        item.setTitle("Synthetic episode");
+        item.setFeed(feed);
+        FeedMedia media = new FeedMedia(item, traceUrl, initial.length(), "audio/mpeg");
+        item.setMedia(media);
+        subscriptionMedia = MediaItemAdapter.fromPlayable(context, media, false);
         assertContinuous(initial);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             player.stop();
-            player.setMediaItem(MediaItem.fromUri(traceUrl));
+            player.setMediaItem(subscriptionMedia);
             player.prepare();
             player.play();
         });
@@ -146,11 +158,15 @@ public class DynamicAdPlaybackTest {
             player = null;
         });
         PlaybackTrace.stop();
+        File exported = new File(context.getCacheDir(), "diagnostic-export.txt");
+        exported.delete();
+        PlaybackTrace.exportDetailed(exported);
         String export;
-        Process logs = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-s", "PlaybackTrace:D", "*:S"});
-        try (InputStream input = logs.getInputStream()) {
+        try (InputStream input = new FileInputStream(exported)) {
             export = IOUtils.toString(input, StandardCharsets.UTF_8);
         }
+        exported.delete();
+        assertTrue(export.contains("Retained playback diagnostics (oldest first)"));
         assertTrue(export.contains(" HEAD "));
         assertTrue(export.contains(" OPEN "));
         assertTrue(export.contains(" RANGE "));
@@ -175,8 +191,8 @@ public class DynamicAdPlaybackTest {
             });
             player.setSkipSilenceEnabled(false);
             player.setPlaybackSpeed(1);
-            player.setMediaItem(MediaItem.fromUri(traceUrl != null
-                    ? traceUrl : server.getBaseUrl() + "/dynamic-ad/" + initial.getName()));
+            player.setMediaItem(subscriptionMedia != null ? subscriptionMedia
+                    : MediaItem.fromUri(server.getBaseUrl() + "/dynamic-ad/" + initial.getName()));
             player.prepare();
             player.play();
         });

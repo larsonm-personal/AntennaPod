@@ -9,6 +9,14 @@ import org.json.JSONObject;
 import okhttp3.Interceptor;
 import okhttp3.Response;
 import java.io.IOException;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -18,7 +26,11 @@ public final class PlaybackTrace {
 
     private static final Set<Long> sources = new HashSet<>();
     private static byte[] salt = new byte[32];
-    private static long target;
+    private static File directory;
+    private static final int FILE_LIMIT = 1024 * 1024;
+    private static final int FILE_COUNT = 8;
+    private static final ThreadPoolExecutor writer = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS,
+            new ArrayBlockingQueue<>(1024), new ThreadPoolExecutor.AbortPolicy());
     private static long started;
     private static long sequence;
     private static boolean active;
@@ -58,7 +70,7 @@ public final class PlaybackTrace {
         return response;
     }
 
-    public static synchronized void start(String url) {
+    private static synchronized void start() {
         if (!BuildConfig.DEBUG) {
             return;
         }
@@ -66,8 +78,6 @@ public final class PlaybackTrace {
         sources.clear();
         sequence = 0;
         started = System.nanoTime();
-        target = identity(url);
-        sources.add(target);
         active = true;
         record(Event.START);
     }
@@ -96,11 +106,114 @@ public final class PlaybackTrace {
         }
     }
 
-    public static synchronized void select(String stream, String feed, String source, boolean local) {
-        if (active && (identity(stream) == target || identity(feed) == target)) {
-            sources.add(identity(source));
-            record(Event.SOURCE, identity(source), local ? 1 : 0);
-            detail("source", source);
+    public static synchronized void initialize(File files) {
+        if (BuildConfig.DEBUG) {
+            directory = new File(files, "playback-diagnostics");
+            start();
+            detail("processStartedUtcMillis", Long.toString(System.currentTimeMillis()));
+        }
+    }
+
+    public static synchronized void select(String source, boolean local) {
+        if (!BuildConfig.DEBUG) {
+            return;
+        }
+        if (!active) {
+            start();
+        }
+        sources.add(identity(source));
+        record(Event.SOURCE, identity(source), local ? 1 : 0);
+        detail("source", source);
+    }
+
+    private static void log(String line) {
+        Log.d("PlaybackTrace", line);
+        File destination = directory;
+        if (destination != null) {
+            String retained = line.length() > 16384 ? line.substring(0, 16384) + " [truncated]" : line;
+            byte[] bytes = (System.currentTimeMillis() + " " + retained + "\n").getBytes(StandardCharsets.UTF_8);
+            try {
+                writer.execute(() -> {
+                    try {
+                        destination.mkdirs();
+                        File current = new File(destination, "trace.0");
+                        if (current.length() + bytes.length > FILE_LIMIT) {
+                            new File(destination, "trace." + (FILE_COUNT - 1)).delete();
+                            for (int i = FILE_COUNT - 2; i >= 0; i--) {
+                                File old = new File(destination, "trace." + i);
+                                if (old.exists() && !old.renameTo(new File(destination, "trace." + (i + 1)))) {
+                                    throw new IOException("Diagnostic rotation failed");
+                                }
+                            }
+                        }
+                        try (FileOutputStream output = new FileOutputStream(current, true)) {
+                            output.write(bytes);
+                        }
+                    } catch (IOException e) {
+                        Log.e("PlaybackTrace", "Diagnostic storage unavailable");
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                Log.e("PlaybackTrace", "Diagnostic queue full; event dropped");
+            }
+        }
+    }
+
+    public static void exportDetailed(File output) throws IOException {
+        if (!BuildConfig.DEBUG) {
+            return;
+        }
+        try {
+            int status = Runtime.getRuntime().exec(new String[]{"logcat", "-d", "-f", output.getAbsolutePath()})
+                    .waitFor();
+            if (status != 0) {
+                throw new IOException("Logcat export failed");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Log export interrupted", e);
+        }
+        export(output);
+    }
+
+    public static void export(File output) throws IOException {
+        if (!BuildConfig.DEBUG) {
+            return;
+        }
+        File source = directory;
+        try {
+            writer.submit(() -> {
+                try {
+                    appendRetained(output, source);
+                } catch (IOException e) {
+                    throw new IllegalStateException(e);
+                }
+            }).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Diagnostic export interrupted", e);
+        } catch (ExecutionException | RejectedExecutionException e) {
+            throw new IOException("Diagnostic export failed", e);
+        }
+    }
+
+    static void appendRetained(File output, File source) throws IOException {
+        try (FileOutputStream stream = new FileOutputStream(output, true)) {
+            stream.write("\nRetained playback diagnostics (oldest first)\n".getBytes(StandardCharsets.UTF_8));
+            if (source != null) {
+                for (int i = FILE_COUNT - 1; i >= 0; i--) {
+                    File file = new File(source, "trace." + i);
+                    if (file.exists()) {
+                        try (FileInputStream input = new FileInputStream(file)) {
+                            byte[] buffer = new byte[8192];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) {
+                                stream.write(buffer, 0, count);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -114,7 +227,7 @@ public final class PlaybackTrace {
 
     public static synchronized void detail(String field, String value) {
         if (BuildConfig.DEBUG && active) {
-            Log.d("PlaybackTrace", ((System.nanoTime() - started) / 1000000) + " " + field + "="
+            log(((System.nanoTime() - started) / 1000000) + " " + field + "="
                     + JSONObject.quote(value == null ? "" : value));
         }
     }
@@ -128,6 +241,6 @@ public final class PlaybackTrace {
         for (long value : values) {
             line.append(' ').append(value);
         }
-        Log.d("PlaybackTrace", line.toString());
+        log(line.toString());
     }
 }

@@ -175,6 +175,7 @@ public class ExoPlayerUtils {
                         Collections.singletonMap("Authorization", authHeader));
             }
             String source = mediaItem.localConfiguration != null ? mediaItem.localConfiguration.uri.toString() : "";
+            PlaybackTrace.select(source, !source.startsWith("http"));
             DataSource.Factory networkFactory = BuildConfig.DEBUG
                     ? () -> new PlaybackDiagnostics(httpDataSourceFactory.createDataSource(),
                             source, authHeader != null)
