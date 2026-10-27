@@ -2,8 +2,7 @@
 
 The server redirects an episode URL to A or B. Each resolved URL keeps its bytes.
 The fixtures share a continuous program sweep, with a two-second ad in A and a
-six-second ad in B at program second five. Run `python3 generate.py` with FFmpeg
-and libmp3lame to regenerate them.
+six-second ad in B at program second five. The Android test build generates them under `app/build/generated/playbackFixtures`.
 
 `ResolvedUrlPlaybackTest` plays A to 17 seconds, releases the player and cache,
 then restores that timestamp after a fresh resolution. The controls keep A or
@@ -30,3 +29,21 @@ There is no production fix here.
 Build the debug app and Android test APK, install both, and run each class using
 AndroidJUnitRunner. The changed-resolution continuity failures are intentional
 in this review branch; setup timeouts are not successful reproductions.
+
+## Generating the fixtures
+
+Android instrumentation builds require Python 3 and FFmpeg with the libmp3lame
+encoder on PATH. They install neither tool. Ordinary app builds do not generate
+these fixtures. Set `-PfixturePython=python` (or an executable path) if Python 3
+is not named `python3` on your machine.
+
+```sh
+./gradlew :app:assembleDebug
+./gradlew :app:assemblePlayDebugAndroidTest
+```
+
+The generator was checked with Python 3.12.14 and FFmpeg 7.1.5/libmp3lame. Two clean
+generations must produce identical bytes with the same tools; encoder versions
+may change the MP3 bytes. After changing tools, regenerate with
+`./gradlew :app:generatePlaybackFixtures --rerun-tasks`. Generated files belong
+only under the ignored build directory, never in Git.
