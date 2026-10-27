@@ -50,19 +50,17 @@ public class HTTPBin extends NanoHTTPD {
     private File resolvedA;
     private File resolvedB;
     private boolean resolveToB;
-    private boolean gateFirstResolvedGet;
     private volatile boolean resolvedPrefixSent;
     private CountDownLatch resolvedGate = new CountDownLatch(0);
     private final List<String> resolvedRequests = new ArrayList<>();
 
-    public synchronized void serveResolvedAds(File a, File b, boolean gateFirstGet) {
+    public synchronized void serveResolvedAds(File a, File b, boolean gateGets) {
         resolvedA = a;
         resolvedB = b;
         resolveToB = false;
-        gateFirstResolvedGet = gateFirstGet;
         resolvedPrefixSent = false;
         resolvedRequests.clear();
-        resolvedGate = new CountDownLatch(gateFirstGet ? 1 : 0);
+        resolvedGate = new CountDownLatch(gateGets ? 1 : 0);
     }
 
     public synchronized void selectResolvedB() {
@@ -105,10 +103,7 @@ public class HTTPBin extends NanoHTTPD {
             IOUtils.skipFully(input, start);
             IOUtils.readFully(input, bytes);
         }
-        boolean gate = gateFirstResolvedGet && session.getMethod() == Method.GET && range == null;
-        if (gate) {
-            gateFirstResolvedGet = false;
-        }
+        boolean gate = resolvedGate.getCount() > 0 && session.getMethod() == Method.GET && range == null;
         InputStream body = new ByteArrayInputStream(bytes) {
             @Override
             public synchronized int read(byte[] buffer, int offset, int length) {

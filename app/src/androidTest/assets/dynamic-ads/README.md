@@ -20,8 +20,8 @@ file controls pass. Thus the mismatch alone does not identify cache mixing.
 `Media3ServiceRestartTest` separately exercises the Android service through a
 MediaController, including database position saving and playback resumption. It
 checks routing and restored media time, not decoded service audio. It does not
-simulate process death or a Wi-Fi/cellular handoff. Service validation is still
-in progress; earlier emulator attempts timed out during setup.
+simulate process death or a Wi-Fi/cellular handoff. Both service cases passed on
+an API 30 AOSP emulator with Bluetooth disabled.
 
 These are synthetic layout changes, not a replay of the reported incident. The
 observed alternate file was shorter; its decoded program alignment is unknown.
