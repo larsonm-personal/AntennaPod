@@ -509,3 +509,14 @@ After publication, PR #1 pointed to the new head, but GitHub returned zero assoc
 workflow runs, status checks and check runs. The cause is unverified; no Actions setting,
 permission or external service was changed. Hosted CI execution and artifact download
 behavior therefore remain unverified, despite the local runner and build checks.
+
+The remaining Collection.stream call in service shutdown polling was replaced by an
+ordinary loop, preserving its condition and timeout. The research-only legacy test's
+stream-based request counts and range checks were also replaced with equivalent loops.
+Both branches built debug/instrumentation APKs and passed focused Checkstyle. A NewApi
+lint audit explicitly enabled test sources at minSdk 23 and found zero instrumentation
+issues in either branch. Its two findings were pre-existing forEach calls in the
+unrelated host-side PlainTextLinksConverterTest; those were left unchanged. The reports
+are retained locally as api23-lint.xml and api23-rich-lint.xml. The focused API 30
+service restart test passed again in 90.703 seconds, with the exact rewind assertion.
+No API 23 device execution, Actions settings change or workflow dispatch is claimed.

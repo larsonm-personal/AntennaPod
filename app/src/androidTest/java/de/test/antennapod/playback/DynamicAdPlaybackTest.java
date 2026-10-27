@@ -233,17 +233,26 @@ public class DynamicAdPlaybackTest {
         awaitResolvedContent();
         List<String> requests = server.getResolvedRequests();
         Log.i(TAG, "restart requests=" + requests);
-        assertEquals(2, requests.stream().filter(request -> request.equals("HEAD original null")).count());
-        if (clearCache) {
-            assertEquals(3, requests.stream().filter(request -> request.startsWith("GET ")).count());
-            assertTrue(requests.contains("GET B null"));
-            assertTrue(requests.stream().anyMatch(request -> request.matches(
-                    "GET B bytes=[1-9][0-9]*-" + (changed.length() - 1))));
-        } else {
-            assertEquals(2, requests.stream().filter(request -> request.startsWith("GET ")).count());
-            assertTrue(requests.stream().anyMatch(request -> request.matches(
-                    "GET " + (switchResolution ? "B" : "A") + " bytes=[1-9][0-9]*-" + (initial.length() - 1))));
+        int resolutions = 0;
+        int gets = 0;
+        boolean requestedRange = false;
+        String representation = clearCache || switchResolution ? "B" : "A";
+        long rangeEnd = (clearCache ? changed.length() : initial.length()) - 1;
+        for (String request : requests) {
+            if (request.equals("HEAD original null")) {
+                resolutions++;
+            }
+            if (request.startsWith("GET ")) {
+                gets++;
+            }
+            requestedRange |= request.matches("GET " + representation + " bytes=[1-9][0-9]*-" + rangeEnd);
         }
+        assertEquals(2, resolutions);
+        assertEquals(clearCache ? 3 : 2, gets);
+        if (clearCache) {
+            assertTrue(requests.contains("GET B null"));
+        }
+        assertTrue(requestedRange);
         assertConsumedContent("resolved restart changed=" + switchResolution + " emptyCache=" + clearCache);
     }
 
