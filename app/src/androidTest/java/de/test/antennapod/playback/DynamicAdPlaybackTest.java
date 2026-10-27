@@ -36,6 +36,8 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import de.danoeh.antennapod.net.download.service.feed.remote.HttpDownloader;
+import de.danoeh.antennapod.model.download.DownloadRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -81,6 +83,7 @@ public class DynamicAdPlaybackTest {
 
     @After
     public void tearDown() {
+        server.releaseResolvedGate();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             if (player != null) {
                 player.release();
@@ -190,6 +193,97 @@ public class DynamicAdPlaybackTest {
 
     }
 
+    @Test
+    public void stableResolvedUrlAcrossPlayerRestartPreservesContent() throws Exception {
+        assertRestartedContent(false);
+    }
+
+    @Test
+    public void freshResolutionAfterPlayerRestartPreservesContent() throws Exception {
+        assertRestartedContent(true);
+    }
+
+    private void assertRestartedContent(boolean switchResolution) throws Exception {
+        server.serveResolvedAds(initial, changed, true);
+        MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
+        playResolved(media, 0);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasResolvedPrefix);
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> sink.consumedUs >= 17000000);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.stop());
+        server.releaseResolvedGate();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.release();
+            player = null;
+            ExoPlayerUtils.releaseCache();
+        });
+        if (switchResolution) {
+            server.selectResolvedB();
+        }
+        playResolved(media, 17000);
+        awaitResolvedContent();
+        List<String> requests = server.getResolvedRequests();
+        Log.i(TAG, "restart requests=" + requests);
+        assertEquals(2, requests.stream().filter(request -> request.equals("HEAD original null")).count());
+        assertEquals(2, requests.stream().filter(request -> request.startsWith("GET ")).count());
+        assertTrue(requests.stream().anyMatch(request -> request.matches(
+                "GET " + (switchResolution ? "B" : "A") + " bytes=[1-9][0-9]*-" + (initial.length() - 1))));
+        assertConsumedContent("resolved restart changed=" + switchResolution);
+    }
+
+    @Test
+    public void completeDownloadKeepsContentAfterFreshResolutionChanges() throws Exception {
+        server.serveResolvedAds(initial, changed, false);
+        File downloaded = new File(context.getCacheDir(), "resolved-download-" + System.nanoTime() + ".mp3");
+        try {
+            String url = server.getBaseUrl() + "/resolved-ad/original";
+            DownloadRequest request = new DownloadRequest(downloaded.getAbsolutePath(), url, "Synthetic episode",
+                    0, FeedMedia.FEEDFILETYPE_FEEDMEDIA, null, null, null, false);
+            HttpDownloader downloader = new HttpDownloader(request);
+            downloader.call();
+            assertTrue(downloader.getResult().isSuccessful());
+            try (InputStream expected = new FileInputStream(initial);
+                    InputStream actual = new FileInputStream(downloaded)) {
+                assertTrue(IOUtils.contentEquals(expected, actual));
+            }
+            final int requestsBeforePlayback = server.getResolvedRequests().size();
+            server.selectResolvedB();
+            playResolved(MediaItem.fromUri(downloaded.toURI().toString()), 17000);
+            awaitResolvedContent();
+            assertEquals(requestsBeforePlayback, server.getResolvedRequests().size());
+            assertConsumedContent("completed local download");
+        } finally {
+            downloaded.delete();
+        }
+    }
+
+    private void playResolved(MediaItem media, long position) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player = ExoPlayerUtils.buildPlayer(context, new DefaultRenderersFactory(context) {
+                @Override
+                protected AudioSink buildAudioSink(Context context, boolean floatOutput, boolean playbackParams) {
+                    sink = new PcmSink(super.buildAudioSink(context, false, false));
+                    return sink;
+                }
+            });
+            player.setSkipSilenceEnabled(false);
+            player.setPlaybackSpeed(1);
+            player.setMediaItem(media, position);
+            player.prepare();
+            player.play();
+        });
+    }
+
+    private void awaitResolvedContent() {
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                assertEquals("Player error", null, player.getPlayerError());
+                playerPosition = player.getCurrentPosition();
+            });
+            return sink.consumedUs >= 27000000;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
+    }
+
     private void assertContinuous(File reconnected) throws Exception {
         server.serveDynamicAds(initial, reconnected, DISCONNECT_BYTE);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -218,6 +312,10 @@ public class DynamicAdPlaybackTest {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
         assertEquals("Reconnect must request the interrupted byte", DISCONNECT_BYTE, server.getResumedByte());
         assertFalse("PCM was flushed before it could be consumed", sink.flushedAfterPcm);
+        assertConsumedContent(reconnected.getName());
+    }
+
+    private void assertConsumedContent(String scenario) {
         List<double[]> windows = sink.consumedWindows();
         int afterReconnect = 0;
         double worstError = 0;
@@ -229,7 +327,7 @@ public class DynamicAdPlaybackTest {
             double expected = mediaTime < 5 ? mediaTime : mediaTime - 2;
             double observed = (window[1] - 20) / ((10000.0 - 20) / 120);
             double error = observed - expected;
-            Log.i(TAG, "variant=" + reconnected.getName() + " media=" + mediaTime
+            Log.i(TAG, "variant=" + scenario + " media=" + mediaTime
                     + " expectedContent=" + expected + " observedContent=" + observed
                     + " error=" + error + " consumed=" + sink.consumedUs / 1000000.0
                     + " playerPosition=" + playerPosition / 1000.0);

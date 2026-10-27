@@ -23,6 +23,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.zip.GZIPOutputStream;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import de.danoeh.antennapod.BuildConfig;
 
@@ -50,6 +52,96 @@ public class HTTPBin extends NanoHTTPD {
     private int disconnectByte;
     private int episodeRequests;
     private long resumedByte = -1;
+
+    private File resolvedA;
+    private File resolvedB;
+    private boolean resolveToB;
+    private boolean gateFirstResolvedGet;
+    private volatile boolean resolvedPrefixSent;
+    private CountDownLatch resolvedGate = new CountDownLatch(0);
+    private final List<String> resolvedRequests = new ArrayList<>();
+
+    public synchronized void serveResolvedAds(File a, File b, boolean gateFirstGet) {
+        resolvedA = a;
+        resolvedB = b;
+        resolveToB = false;
+        gateFirstResolvedGet = gateFirstGet;
+        resolvedPrefixSent = false;
+        resolvedRequests.clear();
+        resolvedGate = new CountDownLatch(gateFirstGet ? 1 : 0);
+    }
+
+    public synchronized void selectResolvedB() {
+        resolveToB = true;
+    }
+
+    public boolean hasResolvedPrefix() {
+        return resolvedPrefixSent;
+    }
+
+    public void releaseResolvedGate() {
+        resolvedGate.countDown();
+    }
+
+    public synchronized List<String> getResolvedRequests() {
+        return new ArrayList<>(resolvedRequests);
+    }
+
+    private synchronized Response getResolvedAdResponse(IHTTPSession session, String name) throws IOException {
+        String range = session.getHeaders().get("range");
+        String request = session.getMethod() + " " + name + " " + range;
+        resolvedRequests.add(request);
+        Log.i(TAG, "resolved-ad " + request);
+        if (name.equals("original")) {
+            Response response = new Response(Response.Status.REDIRECT, MIME_PLAIN, "");
+            response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + (resolveToB ? "B" : "A"));
+            return response;
+        }
+        File file = name.equals("A") ? resolvedA : resolvedB;
+        long start = range == null ? 0 : Long.parseLong(StringUtils.substringBetween(range, "=", "-"));
+        String tail = range == null ? "" : StringUtils.substringAfter(range, "-");
+        long end = tail.isEmpty() ? file.length() - 1 : Math.min(Long.parseLong(tail), file.length() - 1);
+        if (start < 0 || start > end) {
+            Response response = getRangeNotSatisfiable();
+            response.addHeader("Content-Range", "bytes */" + file.length());
+            return response;
+        }
+        byte[] bytes = new byte[(int) (end - start + 1)];
+        try (InputStream input = new FileInputStream(file)) {
+            IOUtils.skipFully(input, start);
+            IOUtils.readFully(input, bytes);
+        }
+        boolean gate = gateFirstResolvedGet && session.getMethod() == Method.GET && range == null;
+        if (gate) {
+            gateFirstResolvedGet = false;
+        }
+        InputStream body = new ByteArrayInputStream(bytes) {
+            @Override
+            public synchronized int read(byte[] buffer, int offset, int length) {
+                if (gate && pos >= 320000) {
+                    resolvedPrefixSent = true;
+                    try {
+                        if (resolvedGate.await(200, TimeUnit.MILLISECONDS)) {
+                            return -1;
+                        }
+                        return super.read(buffer, offset, 1);
+                    } catch (InterruptedException error) {
+                        Thread.currentThread().interrupt();
+                        return -1;
+                    }
+                }
+                return super.read(buffer, offset, gate && pos < 320000 ? Math.min(length, 320000 - pos) : length);
+            }
+        };
+        Response response = new Response(range == null ? Response.Status.OK : Response.Status.PARTIAL_CONTENT,
+                "audio/mpeg", body);
+        response.addHeader("Content-Length", String.valueOf(bytes.length));
+        response.addHeader("Accept-Ranges", "bytes");
+        if (range != null) {
+            response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + file.length());
+        }
+        return response;
+    }
 
     public synchronized void serveDynamicAds(File initial, File reconnected, int disconnectByte) {
         initialEpisode = initial;
@@ -154,6 +246,14 @@ public class HTTPBin extends NanoHTTPD {
         final String func = segments[1];
         final String param = segments[2];
         final Map<String, String> headers = session.getHeaders();
+
+        if (func.equals("resolved-ad") && resolvedA != null) {
+            try {
+                return getResolvedAdResponse(session, param);
+            } catch (IOException | NumberFormatException error) {
+                return getInternalError();
+            }
+        }
 
         if (func.equals("dynamic-ad") && initialEpisode != null) {
             try {

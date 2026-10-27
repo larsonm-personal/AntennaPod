@@ -10,9 +10,10 @@ mechanism demonstration. It is not a validated model of the private provider.
 | Observed in the supplied overnight HEAD journal | 32 checks: 30 successful final 200 responses and two timeouts. The original URL and resolved host/path stayed constant; resolved query values changed. |
 | Observed in those successful HEAD responses | Declared lengths: 127,079,742 bytes in 23 checks and 125,638,411 bytes in seven. Two values of a query parameter tracked those two lengths in this finite sample. Other session/request/time values changed routinely. No ETag or Last-Modified was supplied. |
 | Previously reported capture result | The earlier network-switch captures of the longer representation were byte-identical; the listener confirmed a complete ending. This does not characterize the shorter representation or subsequent provider state. |
-| Unknown | Whether each exact resolved URL pins audio bytes, changes internally over time, expires, redirects again, or behaves differently for HEAD versus GET. |
+| Observed in the subsequent supplied characterization | Fresh original-URL HEAD resolutions 903 seconds apart selected the two lengths above. The exact first resolved URL retained its length, did not redirect, and returned identical bytes at all three sampled intervals after that delay. Fresh-resolution interior MP3 samples differed. The identical initial 64 KB was inside a 357,863-byte ID3 artwork tag, not audio. |
+| Unknown | Stability outside that finite observation, expiry, HEAD/GET differences, and full program alignment across representations. |
 | Unknown | Whether the two lengths correspond to differing ad arrangements, underlying program changes, metadata differences or some other representation change. The correlated query value's meaning is not established. |
-| Hypothesis to test | Fresh resolution selects a new representation while an older resolved URL remains stable. |
+| Supported finite model | Fresh resolution can select differing bytes while the previously resolved URL remains stable at the measured intervals. Ad timing and whole-file identity remain unmeasured. |
 | Alternative hypotheses to test | Bytes behind a pinned URL change; URL expiry changes behavior; metadata changes without sampled-byte changes; sampled bytes change without metadata changes. |
 
 No private URL, token value, audio or raw log belongs in this repository.
@@ -117,7 +118,110 @@ switch, pinned mutation, mutation without metadata change, expiry/access denial,
 ignored ranges, wrong/truncated ranges, timeouts and budgets. These are candidate
 behaviors, not fitted probabilities or asserted real-server transitions. Session
 stickiness, expiration lifetime, network dependence and stochastic transition rates
-remain unknown until measured. No product fix or replacement integration mock is
-included in this iteration.
+remain unknown until measured. The app integration refinement below uses only the fresh-selection/stable-resolved-URL model. No product fix is included.
 
 Local validation: `py -3 scripts/testCharacterizeEpisodeServer.py`.
+
+
+## Streaming lifecycle investigation (3.12.3)
+
+The active release path is Media3, enabled in `common.gradle`, not the legacy
+LocalPSMP service. In official commit `175e5ef8fe3e125a5014d70ef0c57cf85661c71b`:
+
+- [ExoPlayerUtils, lines 44–76 and 110–185](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/playback/service/src/main/java/de/danoeh/antennapod/playback/service/internal/ExoPlayerUtils.java#L44)
+  creates a per-player media-source factory with an in-memory original-to-resolved URL
+  map. An upstream cache miss resolves by HEAD once per original URL in that factory.
+  Seeks, load retries and pause/resume using the same player keep this map. There is
+  no TTL or network-change invalidation in it. GET redirects can still occur later;
+  retaining the request URL is not a guarantee of immutable server content.
+- [RedirectChecker, lines 57–69](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/net/common/src/main/java/de/danoeh/antennapod/net/common/RedirectChecker.java#L57)
+  returns the final HEAD response URL, including HTTP error responses; IOException
+  falls back to the original URL. This resolver does not rewrite the episode database.
+- [Media3PlaybackService, onCreate and onDestroy](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/playback/service/src/main/java/de/danoeh/antennapod/playback/service/Media3PlaybackService.java#L472)
+  builds the player on service creation and releases it/cache on destruction. Player
+  recreation or process restart loses the resolution map. A stop command alone need
+  not destroy the player. Exact Android service-destruction timing remains untested.
+- [MediaLibrarySessionCallback, lines 336–376](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/playback/service/src/main/java/de/danoeh/antennapod/playback/service/internal/MediaLibrarySessionCallback.java#L336)
+  restores the stored media time, with configured skip/rewind adjustments. It does
+  not translate that time using the old and new ad arrangements.
+- The 100 MB disk streaming cache outlives the factory unless evicted/cleared.
+  Media3 1.10.0 [CacheKeyFactory](https://github.com/androidx/media/blob/1.10.0/libraries/datasource/src/main/java/androidx/media3/datasource/cache/CacheKeyFactory.java#L26)
+  keys it by the original URI. Stored redirected-URI metadata does not replace the
+  original upstream request URI in [CacheDataSource.openNextSource](https://github.com/androidx/media/blob/1.10.0/libraries/datasource/src/main/java/androidx/media3/datasource/cache/CacheDataSource.java#L733).
+  Thus cached spans and a new factory's resolution deserve separate observation;
+  source inspection alone does not establish that a particular run spliced them.
+
+These lifecycle files and RedirectChecker are unchanged between that release and our
+upstream baseline `d3e41c6cb37c8e1a060b142686f818999de89859` (Media3 1.10.0 in both).
+Our diagnostic instrumentation adds observations, not a routing policy. No source
+path found here establishes that switching Wi-Fi to cellular itself recreates the
+player or re-resolves the original URL.
+
+### Download comparison
+
+[MediaItemAdapter, lines 86–104](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/playback/base/src/main/java/de/danoeh/antennapod/playback/base/MediaItemAdapter.java#L86)
+selects an available local file instead of the streaming URL. A completed consistent
+file therefore keeps its representation across playback restarts. This fits the
+reported downloads-unaffected clue, without proving that all downloads are immune.
+[HttpDownloader](https://github.com/AntennaPod/AntennaPod/blob/175e5ef8fe3e125a5014d70ef0c57cf85661c71b/net/download/service/src/main/java/de/danoeh/antennapod/net/download/service/feed/remote/HttpDownloader.java#L90)
+resumes partial files using Range and uses If-Range only when a stored validator exists.
+An interrupted download without validators is a separate risk to investigate.
+Baseline changes in this downloader concern disk/error handling, not that routing or
+resume policy.
+
+### Minimal integration refinement
+
+`DynamicAdPlaybackTest` and the existing `HTTPBin` now use `/resolved-ad/original`
+redirecting to stable `/A` or `/B`. The existing synthetic sweep assets have two- and
+six-second ads; these durations are experimental, not measured provider values.
+The first GET is throttled to one byte per 200 ms after 320,000 bytes so buffering cannot consume the whole
+asset before the lifecycle boundary. The player consumes through 17 seconds, stops,
+and its player/cache objects are released. Releasing the gate then ends that transfer; the trickle avoids an artificial read timeout before the stop. A new
+production player restores 17 seconds using the original media URI. This exercises
+production networking, cache, seek mapping and consumed PCM, but does not invoke
+Android service destruction, OS process death, database restoration, automatic
+rewind, or a real network handoff. The explicit 17-second position represents the
+stored-position boundary, not a simulation of all service behavior.
+
+Controls retain resolution A or complete a download with the real HttpDownloader
+before playing its local file after the server's fresh selection changes. The
+changed-resolution continuity assertion remains strict; a failure documents content
+time differing from the original program at the restored position. Request logs
+must distinguish a fresh representation from a demonstrated mixed-cache splice.
+The older `changedAdReconnectPreservesContent` still forces same-URL mutation and
+remains a separately conditional mechanism test, not the observed provider model.
+
+
+Measured API 30 software-emulator result: after consuming A and recreating the
+player, the request sequence was HEAD original → HEAD A → GET A, then HEAD original
+→ HEAD B → GET B `Range: bytes=307200-1952704`. The retained end offset belongs to A;
+B is longer. Consumed PCM initially matched A (media 18.881 s, program 16.868 s),
+then repeated content (media 19.381 s, program 13.368 s). Maximum content-time error
+was 4.013112 seconds. The player timeline continued forward. This supports a cached
+A-prefix/new B-suffix splice in this synthetic lifecycle test, not mutation behind
+one resolved URL. The exact cached boundary depends on read/stop timing.
+
+The first exploratory restart ran before the initial player consumed audio and
+fetched a fresh B response; it showed restored-time mismatch but did not establish
+splicing. A second setup stalled long enough to trigger a same-player retry and
+fully cache A; its fresh-resolution precondition failed. The final throttled setup
+avoids both confounders. These setup failures are not evidence of a provider defect.
+
+The remaining real-world question is whether the user's audible skip follows a new
+player/resolution with reusable cached spans, some other re-resolution path, or a
+different mechanism. The supplied clean app trace and sparse server samples do not
+establish that lifecycle trigger. Downloads being unaffected is consistent with the
+local-file control, but is not sufficient to select this cause by itself.
+
+
+Run individual cases after building/installing the debug app and Android test APK:
+
+```sh
+adb shell am instrument -w -r -e class de.test.antennapod.playback.DynamicAdPlaybackTest#stableResolvedUrlAcrossPlayerRestartPreservesContent de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -r -e class de.test.antennapod.playback.DynamicAdPlaybackTest#freshResolutionAfterPlayerRestartPreservesContent de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
+adb shell am instrument -w -r -e class de.test.antennapod.playback.DynamicAdPlaybackTest#completeDownloadKeepsContentAfterFreshResolutionChanges de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
+```
+
+The changed-resolution case deliberately retains the failing continuity assertion;
+its red result is not a green regression test or a product fix. Do not interpret a
+passing setup assertion or a forward-moving player position as content continuity.
