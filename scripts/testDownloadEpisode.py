@@ -169,6 +169,49 @@ def run_case(directory, server):
     print("PASS:", mode, network or "legacy")
 
 
+def streaming_redirect_case():
+    reached_destination = threading.Event()
+    release = threading.Event()
+
+    class StreamingHandler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            if self.path == "/start":
+                self.send_response(302)
+                self.send_header("Location", "/done")
+                self.send_header("Content-Length", str(1024 * 1024))
+                self.end_headers()
+                self.wfile.write(b"x" * 65537)
+                self.wfile.flush()
+                release.wait(5)
+            else:
+                reached_destination.set()
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"OK")
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), StreamingHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    redirects = capture.Redirects(private=True)
+    try:
+        opener = capture.urllib.request.build_opener(redirects)
+        with opener.open(f"http://127.0.0.1:{server.server_port}/start", timeout=1) as response:
+            assert response.read() == b"OK"
+        assert reached_destination.is_set()
+        assert not release.is_set()
+        evidence = redirects.observations[0]
+        assert evidence["body_capped"] is True
+        assert capture.base64.b64decode(evidence["body_base64"]) == b"x" * 65536
+        print("PASS: oversized streaming redirect follows without draining withheld body")
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+
+
 def input_cases(directory):
     log_path = pathlib.Path(directory) / "ambiguous.txt"
     log_path.write_text('1 2 resolver.original="https://example.invalid/private-one"\n'
@@ -192,6 +235,7 @@ def input_cases(directory):
 
 
 if __name__ == "__main__":
+    streaming_redirect_case()
     server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:

@@ -37,7 +37,9 @@ GET errors and transport failures are terminal too.
 Locations, duplicate response headers, outgoing urllib request headers, UTC times,
 body byte counts/hashes, pause duration and capped error/redirect bodies. Keep both
 folders and the original log outside Git; share only privately. Audio bodies are
-bounded at 256 MiB, error/redirect bodies at 64 KiB, and optional overlap at 128 KiB.
+bounded at 256 MiB, error/redirect evidence at 64 KiB (one additional byte is read
+to detect truncation), and optional overlap at 128 KiB. Redirect responses are closed
+after that bounded read rather than draining their remaining bodies.
 There is one HEAD resolution, two audio requests and one optional overlap request per
 run, plus bounded normal redirects. The original GET is intentionally cut halfway;
 its unread remainder is not captured. A valid 206 creates an explicitly reconstructed

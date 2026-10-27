@@ -77,7 +77,10 @@ class Redirects(urllib.request.HTTPRedirectHandler):
                 request_headers=list(request.header_items()), response_headers=list(headers.items()),
                 location=headers.get("Location"), next_url=url,
                 next_method=request.get_method() if redirected is not None else None)
-            body = response.read(65537)
+            try:
+                body = response.read(65537)
+            finally:
+                response.close()
             self.observations[-1].update(body_base64=base64.b64encode(body[:65536]).decode("ascii"),
                                          body_capped=len(body) > 65536)
         if redirected is not None and request.get_method() == "HEAD":
