@@ -311,11 +311,11 @@ public class DynamicAdPlaybackTest {
         });
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
         assertEquals("Reconnect must request the interrupted byte", DISCONNECT_BYTE, server.getResumedByte());
-        assertFalse("PCM was flushed before it could be consumed", sink.flushedAfterPcm);
         assertConsumedContent(reconnected.getName());
     }
 
     private void assertConsumedContent(String scenario) {
+        assertFalse("PCM was flushed before it could be consumed", sink.flushedAfterPcm);
         List<double[]> windows = sink.consumedWindows();
         int afterReconnect = 0;
         double worstError = 0;
