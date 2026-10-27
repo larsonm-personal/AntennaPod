@@ -320,3 +320,23 @@ The earlier failures remain setup/harness findings, not decoded continuity
 failures. The original service snapshot is preserved in review commit
 `9869c92fb6bb67002bee1ffb6340c2bfb5f1bb20`; its first-GET gate and immediate
 controller release are superseded by these corrections.
+
+### Validation of the updated review snapshot
+
+Review head `1eea1c76dfde955c81e9d3a1d5f44bb17716905b` contains the harness corrections.
+The repeated retained-cache and empty-cache cases reached the strict content
+assertion again, with errors 4.013112 s and 4.055515 s respectively. The repeated
+completed-download control and a warm stable-restart run passed at 0.013130 s.
+One preceding stable run timed out before consuming its first 17 seconds; its log
+recorded AudioTrack stalls and a 10.201-second emulator livelock sample. That
+attempt did not reach the content oracle and is not a successful reproduction.
+No timeout or content tolerance was relaxed. Both service cases passed, including
+shutdown. Hardware-accelerated or device validation remains useful before treating
+the timing as reliable across environments.
+
+The debug app and instrumentation APK built successfully. Final focused Checkstyle
+passed on both branches, including the renderer-factory overload; the research
+instrumentation APK also rebuilt after the harness corrections.
+
+The review branch is for critique, not a frozen submission test. No final third
+branch or PR #8441 comparison has been created.
