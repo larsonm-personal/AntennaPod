@@ -157,8 +157,15 @@ public class DynamicAdPlaybackTest {
             player.release();
             player = null;
         });
-        PlaybackTrace.stop();
         File exported = new File(context.getCacheDir(), "diagnostic-export.txt");
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).until(() -> {
+            exported.delete();
+            PlaybackTrace.export(exported);
+            try (InputStream input = new FileInputStream(exported)) {
+                String retained = IOUtils.toString(input, StandardCharsets.UTF_8);
+                return retained.substring(retained.lastIndexOf("processStartedUtcMillis")).contains(" CACHE ");
+            }
+        });
         exported.delete();
         PlaybackTrace.exportDetailed(exported);
         String export;
@@ -167,6 +174,10 @@ public class DynamicAdPlaybackTest {
         }
         exported.delete();
         assertTrue(export.contains("Retained playback diagnostics (oldest first)"));
+        export = export.substring(export.indexOf("Retained playback diagnostics (oldest first)"));
+        assertTrue(export.contains("processStartedUtcMillis"));
+        export = export.substring(export.lastIndexOf("processStartedUtcMillis"));
+        assertTrue(export.contains(traceUrl.substring(traceUrl.indexOf("&run="))));
         assertTrue(export.contains(" HEAD "));
         assertTrue(export.contains(" OPEN "));
         assertTrue(export.contains(" RANGE "));
