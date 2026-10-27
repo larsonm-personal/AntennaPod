@@ -22,6 +22,7 @@ import de.danoeh.antennapod.playback.service.Media3PlaybackService;
 import de.danoeh.antennapod.storage.database.DBReader;
 import de.danoeh.antennapod.storage.database.PodDBAdapter;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
+import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
 import de.test.antennapod.EspressoTestUtils;
 import de.test.antennapod.util.service.download.HTTPBin;
 import org.apache.commons.io.IOUtils;
@@ -173,13 +174,16 @@ public class Media3ServiceRestartTest {
     }
 
     private void stopService() {
-        onMain(() -> {
-            if (controller != null) {
-                controller.pause();
+        if (controller != null) {
+            onMain(() -> controller.pause());
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() ->
+                    PlaybackPreferences.getCurrentPlayerStatus() == PlaybackPreferences.PLAYER_STATUS_PAUSED);
+            onMain(() -> {
                 controller.release();
                 controller = null;
-            }
-        });
+            });
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        }
         ComponentName service = new ComponentName(context, Media3PlaybackService.class);
         context.stopService(new Intent().setComponent(service));
         ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);

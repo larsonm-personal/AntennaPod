@@ -174,7 +174,7 @@ resume policy.
 `DynamicAdPlaybackTest` and the existing `HTTPBin` now use `/resolved-ad/original`
 redirecting to stable `/A` or `/B`. The existing synthetic sweep assets have two- and
 six-second ads; these durations are experimental, not measured provider values.
-The first GET is throttled to one byte per 200 ms after 320,000 bytes so buffering cannot consume the whole
+Initial full GETs are throttled to one byte per 200 ms after 320,000 bytes so buffering cannot consume the whole
 asset before the lifecycle boundary. The player consumes through 17 seconds, stops,
 and its player/cache objects are released. Releasing the gate then ends that transfer; the trickle avoids an artificial read timeout before the stop. A new
 production player restores 17 seconds using the original media URI. This exercises
@@ -289,3 +289,34 @@ there by 4.055515 s. Both passed the request and consumed-PCM flush checks.
 The debug app and instrumentation APK built, and focused Checkstyle passed.
 Service lifecycle validation is pending; earlier attempts timed out before the
 routing assertions and are not evidence of a content fault.
+
+### Service harness findings
+
+The real service also fetches the media file to discover chapters. That request
+can arrive before the player's GET, so gating only the first GET does not ensure
+a partial playback cache. The server now gates all initial full GETs until release.
+Chapter probes can close their streams normally; the playback response remains
+bounded. With that change, the pause/resume routing assertions reached one HEAD
+resolution and a later A range request.
+
+That run still timed out in teardown. Bluetooth was disabled in the emulator;
+`dumpsys activity services` showed no bound client, but the service had been
+started again. The next harness revision waits for the production paused status
+before releasing its controller and stopping the service. No content assertion
+is used as evidence of service teardown.
+
+With the paused-status wait, the service restart case passed on API 30. The first
+service saved 18,064 ms; the new service invoked `onPlaybackResumption`, restored
+17,264 ms (the normal 800 ms rewind), and advanced to 21,164 ms. Playback performed
+a fresh HEAD resolving to B and requested B `bytes=276054-1952704`. Chapter probing
+also made separate full GETs. This verifies one explicit service teardown/resumption
+path, not process death, network handoff, or the reported user's trigger. The
+service test checks routing and stored media time; the separate player test
+observes consumed PCM.
+
+The corrected pause/resume case also passed, including teardown. Both service
+cases ran with Bluetooth disabled on the software API 30 AOSP ATD emulator.
+The earlier failures remain setup/harness findings, not decoded continuity
+failures. The original service snapshot is preserved in review commit
+`9869c92fb6bb67002bee1ffb6340c2bfb5f1bb20`; its first-GET gate and immediate
+controller release are superseded by these corrections.
