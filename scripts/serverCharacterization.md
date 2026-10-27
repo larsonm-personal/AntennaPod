@@ -225,3 +225,67 @@ adb shell am instrument -w -r -e class de.test.antennapod.playback.DynamicAdPlay
 The changed-resolution case deliberately retains the failing continuity assertion;
 its red result is not a green regression test or a product fix. Do not interpret a
 passing setup assertion or a forward-moving player position as content continuity.
+
+### Empty-cache comparison
+
+The same A playback followed by cache deletion and fresh B resolution also fails
+continuity. In the API 30 run, requests were HEAD original → HEAD A → GET A,
+then HEAD original → HEAD B → GET B without Range → GET B
+`bytes=271884-2016652`. The first resumed window was already about four seconds
+behind A (maximum error 4.055515 s; subsequent windows about 4.013 s).
+Setup and the consumed-PCM flush guard passed.
+All 40 resumed windows matched B's specified layout within 56 ms after accounting
+for its four extra ad seconds. B playback itself was consistent in this comparison.
+
+With retained cache, the resumed windows first follow A, then switch to B and
+repeat content. Without cache, they follow B immediately. Thus the within-playback
+backward transition supports byte mixing in this fixture, but the four-second
+position mismatch alone does not: restoring A's timestamp in B is sufficient.
+An empty cache is not a content-position mapping policy.
+
+### What is still missing from the server evidence
+
+The measured alternate was shorter: 125,638,411 versus 127,079,742 bytes. Our
+synthetic B has four additional seconds of ad before otherwise identical program
+audio. That insertion, its location and constant bitrate are assumptions; switching
+which fixture is shorter would not establish the measured audio relationship.
+The observed 903-second interval brackets two fresh resolutions, not a measured
+server expiry timer. The fixture selects B explicitly and keeps both resolved URLs
+accessible; it does not simulate a fifteen-minute timer.
+
+No private captures are available in this checkout. To resolve alignment, capture
+both complete resolved representations on the listener's machine, keeping each
+request pinned to its exact resolved URL. Retain response/range metadata privately,
+decode both locally, and align common spoken-program landmarks before and after
+each differing segment and near the ending. This determines whether bytes changed
+because of metadata, encoding, inserted/removed audio, or different program content.
+If complete files are impractical, overlapping decoded samples around the reported
+skip can establish local alignment, but cannot establish whole-episode equivalence
+or a complete ending. Share only the alignment offsets, decoded durations and a
+redacted lifecycle/request timeline; URLs, tokens and audio need not enter Git.
+The existing offline analyzer measures duration but does not yet compute program
+alignment. A separate app trace around the audible fault must establish whether
+service/player recreation or fresh resolution actually occurred.
+
+### Minimal review extraction
+
+`playback-resolution-review` starts at upstream base
+`d3e41c6cb37c8e1a060b142686f818999de89859`. It retains the resolved-URL server,
+two generated fixtures, consumed-PCM oracle, completed-download control and
+service lifecycle checks. The production change is only a renderer-factory
+overload for the observer. Diagnostic tracing and the forced same-URL mutation
+experiment remain on the research branch.
+
+The absolute A-program-position assertion is deliberately still strict in the
+empty-cache comparison. Its failure is a finding about timestamp restoration,
+not a requirement that a cache-only change must satisfy. The test is for review,
+not frozen for evaluating a proposed fix. PR #8441 has not been inspected.
+
+The published review snapshot is `9869c92fb6bb67002bee1ffb6340c2bfb5f1bb20`.
+On API 30 AOSP ATD with software emulation and package AOT compilation, its
+stable restart and completed-download controls passed (maximum error 0.013130 s).
+Retained-cache B failed at decoded content by 4.013112 s; empty-cache B failed
+there by 4.055515 s. Both passed the request and consumed-PCM flush checks.
+The debug app and instrumentation APK built, and focused Checkstyle passed.
+Service lifecycle validation is pending; earlier attempts timed out before the
+routing assertions and are not evidence of a content fault.

@@ -7,6 +7,8 @@ import androidx.media3.common.C;
 import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.database.StandaloneDatabaseProvider;
+import androidx.media3.datasource.cache.SimpleCache;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.audio.AudioSink;
@@ -195,15 +197,20 @@ public class DynamicAdPlaybackTest {
 
     @Test
     public void stableResolvedUrlAcrossPlayerRestartPreservesContent() throws Exception {
-        assertRestartedContent(false);
+        assertRestartedContent(false, false);
     }
 
     @Test
     public void freshResolutionAfterPlayerRestartPreservesContent() throws Exception {
-        assertRestartedContent(true);
+        assertRestartedContent(true, false);
     }
 
-    private void assertRestartedContent(boolean switchResolution) throws Exception {
+    @Test
+    public void freshResolutionWithoutCachedBytesPreservesContent() throws Exception {
+        assertRestartedContent(true, true);
+    }
+
+    private void assertRestartedContent(boolean switchResolution, boolean clearCache) throws Exception {
         server.serveResolvedAds(initial, changed, true);
         MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
         playResolved(media, 0);
@@ -216,6 +223,9 @@ public class DynamicAdPlaybackTest {
             player = null;
             ExoPlayerUtils.releaseCache();
         });
+        if (clearCache) {
+            SimpleCache.delete(new File(context.getCacheDir(), "streaming"), new StandaloneDatabaseProvider(context));
+        }
         if (switchResolution) {
             server.selectResolvedB();
         }
@@ -224,10 +234,17 @@ public class DynamicAdPlaybackTest {
         List<String> requests = server.getResolvedRequests();
         Log.i(TAG, "restart requests=" + requests);
         assertEquals(2, requests.stream().filter(request -> request.equals("HEAD original null")).count());
-        assertEquals(2, requests.stream().filter(request -> request.startsWith("GET ")).count());
-        assertTrue(requests.stream().anyMatch(request -> request.matches(
-                "GET " + (switchResolution ? "B" : "A") + " bytes=[1-9][0-9]*-" + (initial.length() - 1))));
-        assertConsumedContent("resolved restart changed=" + switchResolution);
+        if (clearCache) {
+            assertEquals(3, requests.stream().filter(request -> request.startsWith("GET ")).count());
+            assertTrue(requests.contains("GET B null"));
+            assertTrue(requests.stream().anyMatch(request -> request.matches(
+                    "GET B bytes=[1-9][0-9]*-" + (changed.length() - 1))));
+        } else {
+            assertEquals(2, requests.stream().filter(request -> request.startsWith("GET ")).count());
+            assertTrue(requests.stream().anyMatch(request -> request.matches(
+                    "GET " + (switchResolution ? "B" : "A") + " bytes=[1-9][0-9]*-" + (initial.length() - 1))));
+        }
+        assertConsumedContent("resolved restart changed=" + switchResolution + " emptyCache=" + clearCache);
     }
 
     @Test
