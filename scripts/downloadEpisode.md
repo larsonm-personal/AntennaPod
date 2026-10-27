@@ -242,3 +242,43 @@ Local checks: `py -3 scripts/testWatchEpisodeRoute.py`.
 For the next evidence-driven test of pinned versus freshly resolved URLs, see
 [server characterization](serverCharacterization.md). It samples bounded, identical
 byte windows and keeps candidate server behaviors separate from the synthetic skip test.
+
+## Locate sparse B samples in an existing A (offline)
+
+Use the full A already downloaded and the characterization directory containing
+`events.jsonl` and its sample files. Nothing is uploaded or fetched:
+
+```bat
+py -3 scripts/alignEpisodeSamples.py "C:\path\existing-A.mp3" "C:\path\server-characterization-1" --decode --output "C:\path\sparse-alignment.json"
+```
+
+The helper first checks all three saved baseline A windows and their declared total
+against the supplied file. A mismatch stops alignment. It then searches each interior
+B sample for three unique 4 KB encoded blocks at a consistent displacement. Matching
+blocks are byte evidence; the report also counts complete consecutive MP3 frames in
+the first block. Where A has a complete supported MP3 frame index, the report gives
+A's frame-clock time at the match and at the original requested byte offset, plus
+their difference. This uses actual frame sizes and sample rates, not file-size ratios.
+The frame clock precedes encoder-delay/padding adjustment and is not exact audible time.
+The first sample is excluded because it may contain metadata rather than audio.
+
+Without `--decode`, only Python 3.9 or newer is required. With it, local FFmpeg is
+optional and explicitly reported if missing. The helper decodes mono audio locally,
+excludes half a second at each fragment edge, and searches A's 100 ms log-RMS envelope.
+A candidate needs correlation of at least 0.90 and a margin of at least 0.10 over a
+nonoverlapping alternative. These are heuristic scores, not confidence probabilities.
+Listen to candidate passages to confirm them, especially if fragment decoding reports
+errors. Repeated music, silence, short excerpts or changed encoding can make the result
+ambiguous. Decoder lead-in and the 100 ms grid limit timing precision. Full-A decoder
+errors prevent decoded alignment rather than silently shifting its reference timeline.
+
+A whole-file decode can take minutes. A is held in memory (about 121 MB for the
+observed longer file); MB here means 1,048,576 bytes. Reports contain hashes and sample
+numbers, not source URLs or local paths. Keep the inputs and report outside Git.
+Existing reports are never overwritten. No full B capture mode is added.
+
+Local correspondence does not establish B's absolute timeline, ad layout, intervening
+content or ending. Nonmatch is not proof of a gap. The existing duration analyzer and
+this sparse alignment report answer different questions. Run the synthetic checks with
+`py -3 scripts/testAlignEpisodeSamples.py`; the real MP3 check is skipped explicitly
+when FFmpeg is unavailable.
