@@ -1,6 +1,16 @@
 package de.danoeh.antennapod.playback.service.internal;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.io.IOException;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
@@ -29,5 +39,47 @@ public class StreamCacheGenerationTest {
         assertEquals(other.token, new StreamCacheGeneration(context, enclosure + "2").token);
         assertFalse(context.getSharedPreferences("stream-cache-generations", Context.MODE_PRIVATE)
                 .getAll().toString().contains(enclosure));
+    }
+    @Test
+    public void failedCommitRestoresMemoryAndDoesNotBecomeAFalseDurableGeneration() throws Exception {
+        Context context = mock(Context.class);
+        SharedPreferences preferences = mock(SharedPreferences.class);
+        Map<String, String> memory = new HashMap<>();
+        Map<String, String> disk = new HashMap<>();
+        AtomicBoolean failWrites = new AtomicBoolean(true);
+        when(context.getSharedPreferences(anyString(), anyInt())).thenReturn(preferences);
+        when(preferences.getString(anyString(), anyString())).thenAnswer(call ->
+                memory.getOrDefault(call.getArgument(0), call.getArgument(1)));
+        when(preferences.edit()).thenAnswer(call -> {
+            SharedPreferences.Editor editor = mock(SharedPreferences.Editor.class);
+            Map<String, String> pending = new HashMap<>();
+            when(editor.putString(anyString(), anyString())).thenAnswer(write -> {
+                pending.put(write.getArgument(0), write.getArgument(1));
+                return editor;
+            });
+            when(editor.commit()).thenAnswer(commit -> {
+                memory.putAll(pending);
+                if (failWrites.get()) {
+                    return false;
+                }
+                disk.putAll(pending);
+                return true;
+            });
+            return editor;
+        });
+        String uri = "https://example.invalid/write-failure";
+        StreamCacheGeneration original = new StreamCacheGeneration(context, uri);
+        assertThrows(IOException.class, original::invalidate);
+        assertEquals(original.token, new StreamCacheGeneration(context, uri).token);
+        memory.clear();
+        memory.putAll(disk);
+        assertEquals(original.token, new StreamCacheGeneration(context, uri).token);
+        failWrites.set(false);
+        original.invalidate();
+        String persisted = new StreamCacheGeneration(context, uri).token;
+        assertNotEquals(original.token, persisted);
+        memory.clear();
+        memory.putAll(disk);
+        assertEquals(persisted, new StreamCacheGeneration(context, uri).token);
     }
 }

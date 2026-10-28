@@ -38,6 +38,7 @@ public final class StreamCacheGeneration {
         synchronized (StreamCacheGeneration.class) {
             if (token.equals(preferences.getString(identifier, "0"))
                     && !preferences.edit().putString(identifier, UUID.randomUUID().toString()).commit()) {
+                preferences.edit().putString(identifier, token).commit();
                 throw new IOException("Could not persist streaming cache invalidation");
             }
         }
