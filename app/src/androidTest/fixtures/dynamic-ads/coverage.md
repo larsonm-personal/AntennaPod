@@ -244,3 +244,58 @@ were not changed, and the frozen content failure persisted after this correction
 Evidence is under `/workspace/antennapod-validation/equal-length-fixture/`.
 No new mutation/recovery playback acceptance or seek-oracle change is included
 in this step; those remain dependent on the implementation-neutral observer review.
+
+## Segment classifier under review
+
+`ResolvedContentOracle` intersects A/B/C candidates across every consumed window
+of a complete program segment. B and C remain indistinguishable in these shared
+program windows. Empty evidence and any segment with no single compatible edition
+produce no candidate. This is restricted to the generated post-ad program, not
+a classifier for the fixtures' tones or arbitrary podcast audio.
+
+The sequence helper permits at most one edition transition in the first target
+pass, then intersects one final edition across exactly one complete replay.
+Nine observation-level tests cover coherent segments, clean transitions,
+ambiguity, mixed windows, alternating regions, replay mismatch, prior corruption
+and incomplete replay. These are oracle checks, not real playback evidence.
+Independent explicit edition-sequence enumeration matched the Java helper for
+823,543 candidate combinations.
+
+The classifier is not wired into playback acceptance yet. The current observer
+maps a known start plus accepted PCM frames onto an output-relative playback head.
+Expected seek flush/reuse needs an archived consumed snapshot and a new output
+clock origin, not merely cleared counters. An unrequested replacement also needs
+a verified media-time anchor for the new output. Media3 exposes the renderer
+stream offset only through protected BaseRenderer methods; the public output
+position is output-relative. A Player seek discontinuity is reported through
+optimistically updated playback state and is not proof that the renderer has
+flushed. Treating either callback alone as an epoch boundary could mislabel old
+queued audio or lose already consumed corruption.
+
+Observer changes and the two new mutation playback cases are stopped at that
+contract, rather than guessing an offset or claiming implementation-neutral
+recovery acceptance. The smallest bounded alternative is one pending record for
+a harness-requested seek: old output, known target and retained consumed windows;
+complete it on actual flush or replacement. Unanchored app-driven replacements
+would remain explicitly unmeasured until a public anchoring contract is verified.
+No production code, existing observer, frozen assertion or deadline changed here.
+
+Classifier validation: debug builds and focused Checkstyle passed. On-device
+logcat records all 28 cases finished, 25 passed, three content failures and zero
+ignored. The failures were the existing same-URL, frozen restart and selected-
+edition seek regressions. The outer 600-second shell bound expired during the
+last service case (status 124), so its runner output lacks the final summary;
+a subsequent logcat snapshot records that case completing and the aggregate
+result. No per-test deadline was changed and no per-test setup timeout occurred.
+Evidence and hashes are under `/workspace/antennapod-validation/oracle-controls/`.
+
+A separate generated fixture family could avoid the media-anchor dependency for
+semantic identity by assigning each edition a disjoint sweep band. Frequency
+would then identify edition and program position directly. Guard bands within
+the MP3 passband are preferable to adjoining bands or a 20 kHz endpoint. The
+original A/B fixtures and measured-behavior regression must remain unchanged.
+This is a proposed simplification, not implemented or validated audio evidence.
+Played-window gating still needs output-relative frame accounting, correct
+partial-write handling and preserved consumed snapshots across flush/release.
+Seek accuracy additionally needs the fixture's known edition-specific mapping
+from requested media time to program time and validated decoder trimming.
