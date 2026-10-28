@@ -2,6 +2,7 @@ package de.test.antennapod.playback;
 
 import android.content.Context;
 import android.media.AudioFormat;
+import android.os.FileObserver;
 import android.util.Log;
 
 import androidx.annotation.OptIn;
@@ -66,12 +67,14 @@ public class ResolvedUrlPlaybackTest {
     private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
     private double observationBoundary = 90;
     private long observationEndMs = MIN_OBSERVATION_END_MS;
+    private final List<FileObserver> fileObservers = new ArrayList<>();
     private Context context;
     private ExoPlayer player;
     private volatile PcmOutput sink;
     private volatile boolean outputRecreated;
     private File initial;
     private File changed;
+    private long resumeByte;
     private volatile long playerPosition;
 
     @Before
@@ -82,6 +85,7 @@ public class ResolvedUrlPlaybackTest {
         deleteCache();
         initial = copyAsset("resolved-a.mp3");
         changed = copyAsset("resolved-b.mp3");
+        resumeByte = frameOffsetAt(RESUME_MS);
         server.start(initial, changed);
     }
 
@@ -97,6 +101,9 @@ public class ResolvedUrlPlaybackTest {
 
     @After
     public void tearDown() throws Exception {
+        for (FileObserver observer : fileObservers) {
+            observer.stopWatching();
+        }
         server.resumeResponses();
         try {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -145,12 +152,15 @@ public class ResolvedUrlPlaybackTest {
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
         Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
                 () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
+        watchCache(new File(context.getCacheDir(), "streaming"));
+        logCacheFiles("before stop", new File(context.getCacheDir(), "streaming"));
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.stop());
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             player.release();
             player = null;
             ExoPlayerUtils.releaseCache();
         });
+        logCacheFiles("after player/cache release", new File(context.getCacheDir(), "streaming"));
         server.resumeResponses();
         long cachedEndBytes = cachedEndAtResume();
         double cacheEnd = frameTimeAt(cachedEndBytes);
@@ -166,7 +176,9 @@ public class ResolvedUrlPlaybackTest {
         if (switchResolution) {
             server.switchFreshResolutionsToB();
         }
+        logCacheFiles("before new player", new File(context.getCacheDir(), "streaming"));
         playResolved(media, RESUME_MS);
+        logCacheFiles("after new player", new File(context.getCacheDir(), "streaming"));
         awaitResolvedContent();
         Log.i(TAG, "restart requests=" + server.getRequests());
         assertConsumedContent("restart changed=" + switchResolution + " emptyCache=" + clearCache,
@@ -294,7 +306,6 @@ public class ResolvedUrlPlaybackTest {
                 new NoOpCacheEvictor(), database);
         try (RandomAccessFile reference = new RandomAccessFile(initial, "r")) {
             long end = 0;
-            long resumeByte = frameOffsetAt(RESUME_MS);
             for (String key : cache.getKeys()) {
                 for (CacheSpan span : cache.getCachedSpans(key)) {
                     byte[] expected = new byte[(int) span.length];
@@ -305,7 +316,8 @@ public class ResolvedUrlPlaybackTest {
                         saved.readFully(actual);
                     }
                     assertArrayEquals("Cached span differs from A", expected, actual);
-                    Log.i(TAG, "cachedSpanStart=" + span.position + " length=" + span.length);
+                    Log.i(TAG, "cachedSpanStart=" + span.position + " length=" + span.length
+                            + " physical=" + span.file.length() + " file=" + span.file + " key=" + key);
                 }
                 long length = cache.getCachedLength(key, resumeByte, initial.length() - resumeByte);
                 if (length > 0) {
@@ -314,8 +326,46 @@ public class ResolvedUrlPlaybackTest {
             }
             return end;
         } finally {
+            logCacheFiles("before probe release", new File(context.getCacheDir(), "streaming"));
             cache.release();
+            logCacheFiles("after probe release", new File(context.getCacheDir(), "streaming"));
             database.close();
+        }
+    }
+
+    private void watchCache(File directory) {
+        FileObserver observer = new FileObserver(directory.getAbsolutePath(), FileObserver.MODIFY
+                | FileObserver.CLOSE_WRITE | FileObserver.CREATE | FileObserver.DELETE
+                | FileObserver.MOVED_FROM | FileObserver.MOVED_TO) {
+            @Override
+            public void onEvent(int event, String path) {
+                File file = path == null ? directory : new File(directory, path);
+                Log.i(TAG, "cacheFileEvent=" + event + " file=" + file
+                        + " exists=" + file.exists() + " physical=" + file.length());
+            }
+        };
+        fileObservers.add(observer);
+        observer.startWatching();
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    watchCache(file);
+                }
+            }
+        }
+    }
+
+    private void logCacheFiles(String stage, File directory) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    logCacheFiles(stage, file);
+                } else {
+                    Log.i(TAG, "cacheSnapshot=" + stage + " file=" + file + " physical=" + file.length());
+                }
+            }
         }
     }
 
