@@ -1,5 +1,6 @@
 package de.danoeh.antennapod.playback.service.internal;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Base64;
@@ -34,6 +35,7 @@ public final class StreamCacheGeneration {
         return "resolved-stream-v2:" + identifier + ":" + token + ":" + resource;
     }
 
+    @SuppressLint("ApplySharedPref")
     public void invalidate() throws IOException {
         synchronized (StreamCacheGeneration.class) {
             if (token.equals(preferences.getString(identifier, "0"))
