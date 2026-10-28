@@ -73,6 +73,32 @@ The real edit location, full B timeline and ending remain unknown. Sparse matche
 not establish a single deletion, its cause, or the user's actual playback transition.
 There is no production fix here.
 
+## Additional synthetic cases
+
+The same generator also accepts separate sweep bands: A uses 500–2000 Hz and B
+uses 3500–5000 Hz. Within the program sweep, frequency identifies the edition
+and program second; these checks stay outside the fixed ad tones.
+The tagged observer reuses the zero-crossing estimator and gates accepted PCM
+against AudioTrack's public playback-head frame counter. It retains played
+windows across flush/reuse and replacement, and discards queued-only windows.
+It does not reconstruct the player's media timeline. Stable decoder/seek controls
+calibrate a one-second target tolerance; the frozen oracle remains at 0.25 seconds.
+
+The new integrity cases allow one edition change. A quarter-second window crossing
+that change can contain both sweeps, so its averaged frequency has no precise
+program position. The assertion permits one such window at the boundary, retains
+it in the history and logs that uncertainty. Progression must fit on both sides. An explicit rejection is
+reported separately and cannot erase earlier corrupt audio. The seeking case
+visits three program targets, then repeats that list once in the final edition.
+It requires the actual target audio, not a position callback or request route.
+This checks those intervals, not every possible passage or exact resume time.
+
+Tagging changes the program bytes throughout; it is not evidence of the captured
+server's layout or a sufficient challenge to overlap-based fixes. The original
+shared-program fixtures remain unchanged. The harmless URL-switch control serves
+the same existing file under A and B and requires successful coherent playback.
+No extra file or generator is needed for identical content.
+
 ## Build and run
 
 Instrumentation builds require Python 3 and FFmpeg with libmp3lame on PATH; no tools
@@ -91,7 +117,8 @@ adb install -r app/build/outputs/apk/androidTest/play/debug/app-play-debug-andro
 adb shell am instrument -w -r -e class de.test.antennapod.playback.ResolvedUrlPlaybackTest de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner
 ```
 
-Use `Media3ServiceRestartTest` or `ResolvedEpisodeServerTest` in the same runner
+Use `Media3ServiceRestartTest`, `ResolvedEpisodeServerTest`, or
+`ResolvedTaggedAudioTest` in the same runner
 command for the lifecycle and HTTP checks. The baseline mixed-representation case
 should fail at its content assertion. Setup, coverage, clock or cleanup failures
 are not successful reproductions. The test is not yet frozen for patch evaluation.

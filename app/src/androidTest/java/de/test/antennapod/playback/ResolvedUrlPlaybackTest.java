@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.source.MediaLoadData;
 import androidx.media3.exoplayer.audio.AudioOutput;
 import androidx.media3.exoplayer.audio.AudioOutputProvider;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutput;
 import androidx.media3.exoplayer.audio.ForwardingAudioOutput;
 import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider;
 import androidx.test.filters.LargeTest;
@@ -70,7 +71,8 @@ public class ResolvedUrlPlaybackTest {
     private static final double INITIAL_AD_SECONDS = 2 + 2299 * 1152.0 / 44100;
     private static final int CHANGED_AD_SECONDS = 2;
     private static final double TOLERANCE_SECONDS = 0.25;
-    private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
+    private static final double TAGGED_TOLERANCE_SECONDS = 1;
+    private ResolvedEpisodeServer server = new ResolvedEpisodeServer();
     private double observationBoundary = 90;
     private long observationEndMs = MIN_OBSERVATION_END_MS;
     private final Set<Long> activeLoads = new HashSet<>();
@@ -79,6 +81,7 @@ public class ResolvedUrlPlaybackTest {
     private Context context;
     private ExoPlayer player;
     private volatile PcmOutput sink;
+    private ResolvedTaggedAudio taggedAudio;
     private volatile boolean outputRecreated;
     private volatile PcmOutput outputBeforeSeek;
     private long seekStartMs;
@@ -288,6 +291,148 @@ public class ResolvedUrlPlaybackTest {
         }
     }
 
+    @Test
+    public void identicalAudioAcrossDifferentUrlsKeepsPlaying() throws Exception {
+        server.stop();
+        server = new ResolvedEpisodeServer();
+        server.start(initial, initial);
+        MediaItem media = primeCachedEpisode();
+        server.switchFreshResolutionsToB();
+        playResolved(media, RESUME_MS);
+        awaitResolvedContent();
+        assertConsumedContent("identical bytes, different URLs", INITIAL_AD_SECONDS);
+    }
+
+    @Test
+    public void sameLengthMutationPreservesTaggedAudioIntegrity() throws Exception {
+        useTaggedFixtures(true);
+        MediaItem media = primeCachedEpisode();
+        server.replaceAWithB();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        collectTaggedAudio(-1, taggedObservationWindows(), true);
+        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+    }
+
+    @Test
+    public void headGetDisagreementPreservesTaggedAudioIntegrity() throws Exception {
+        useTaggedFixtures(false);
+        MediaItem media = primeCachedEpisode();
+        server.redirectGetsFromAToB();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        collectTaggedAudio(-1, taggedObservationWindows(), true);
+        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+    }
+
+    @Test
+    public void taggedSwitchKeepsTargetContentRecoverable() throws Exception {
+        useTaggedFixtures(false);
+        MediaItem media = primeCachedEpisode();
+        server.switchFreshResolutionsToB();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        List<ResolvedTaggedAudio.Heard> heard = collectTaggedAudio(-1, taggedObservationWindows(), false);
+        double[] targets = {73, 103, 83};
+        for (double target : targets) {
+            int before = taggedAudio.epoch();
+            seekToProgram(heard.get(heard.size() - 1).edition, target);
+            heard = collectTaggedAudio(before, 12, false);
+        }
+        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+        int finalEdition = heard.get(heard.size() - 1).edition;
+        for (double target : targets) {
+            int before = taggedAudio.epoch();
+            seekToProgram(finalEdition, target);
+            assertTaggedTarget(collectTaggedAudio(before, 12, false), finalEdition, target);
+        }
+        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+    }
+
+    @Test
+    public void taggedFixtureIdentifiesBothEditionsThroughOrdinarySeeks() throws Exception {
+        useTaggedFixtures(false);
+        for (String edition : new String[] {"A", "B"}) {
+            taggedAudio = new ResolvedTaggedAudio();
+            playResolved(MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/" + edition), RESUME_MS);
+            collectTaggedAudio(-1, 12, false);
+            int source = edition.equals("A") ? 0 : 1;
+            for (double target : new double[] {73, 103, 83}) {
+                int before = taggedAudio.epoch();
+                seekToProgram(source, target);
+                List<ResolvedTaggedAudio.Heard> heard = collectTaggedAudio(before, 12, false);
+                assertTaggedTarget(heard, source, target);
+            }
+            ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+            cancelLoadingAndWait();
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                player.release();
+                player = null;
+                ExoPlayerUtils.releaseCache();
+            });
+        }
+    }
+
+    private int taggedObservationWindows() {
+        return (int) ((observationEndMs - RESUME_MS) / 250) + 4;
+    }
+
+    private void useTaggedFixtures(boolean equalLength) throws Exception {
+        server.stop();
+        initial.delete();
+        changed.delete();
+        initial = copyAsset("tagged-a.mp3");
+        changed = copyAsset(equalLength ? "tagged-equal-length.mp3" : "tagged-b.mp3");
+        server = new ResolvedEpisodeServer();
+        server.start(initial, changed);
+    }
+
+    private List<ResolvedTaggedAudio.Heard> collectTaggedAudio(int before, int count, boolean allowRejection) {
+        AtomicBoolean rejected = new AtomicBoolean();
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                rejected.set(player.getPlayerError() != null);
+                if (rejected.get()) {
+                    Log.i(TAG, "tagged playback error=" + player.getPlayerError());
+                }
+            });
+            return rejected.get() || taggedAudio.after(before).size() >= count;
+        });
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.pause());
+        List<ResolvedTaggedAudio.Heard> heard = taggedAudio.after(before);
+        for (ResolvedTaggedAudio.Heard window : heard) {
+            Log.i(TAG, "tagged epoch=" + window.epoch + " source=" + window.edition
+                    + " program=" + window.program + " output=" + window.outputSeconds);
+        }
+        if (rejected.get()) {
+            ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+        }
+        Log.i(TAG, "tagged outcome=" + (rejected.get() ? "explicit rejection; recovery not established"
+                : "played audio; integrity checked separately") + " windows=" + heard.size());
+        assertTrue("Stable playback rejected", allowRejection || !rejected.get());
+        return heard;
+    }
+
+    private void seekToProgram(int edition, double target) {
+        long position = Math.round((target + (edition == 0 ? INITIAL_AD_SECONDS : CHANGED_AD_SECONDS)) * 1000);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.seekTo(position);
+            player.play();
+        });
+    }
+
+    private void assertTaggedTarget(List<ResolvedTaggedAudio.Heard> heard, int source, double target) {
+        assertTrue("Insufficient played target audio", heard.size() >= 8);
+        double worst = 0;
+        double origin = heard.get(0).outputSeconds;
+        for (ResolvedTaggedAudio.Heard window : heard) {
+            assertEquals("Unexpected edition at target", source, window.edition);
+            worst = Math.max(worst, Math.abs(window.program - (target + window.outputSeconds - origin + 0.125)));
+        }
+        Log.i(TAG, "tagged stable target=" + target + " source=" + source + " maxError=" + worst);
+        assertTrue("Tagged target calibration error=" + worst, worst < TAGGED_TOLERANCE_SECONDS);
+    }
+
     private void awaitPrimedAudio() {
         long[] nextReportMs = {0};
         try {
@@ -416,6 +561,11 @@ public class ResolvedUrlPlaybackTest {
                     assertEquals(C.ENCODING_PCM_16BIT, config.encoding);
                     assertEquals(AudioFormat.CHANNEL_OUT_MONO, config.channelMask);
                     assertFalse(config.isOffload);
+                    if (taggedAudio != null) {
+                        AudioTrackAudioOutput output = (AudioTrackAudioOutput) super.getAudioOutput(config);
+                        return taggedAudio.wrap(output,
+                                () -> output.getAudioTrack().getPlaybackHeadPosition() & 0xffffffffL);
+                    }
                     long startMs = position;
                     if (outputBeforeSeek != null && outputBeforeSeek == sink) {
                         assertTrue("Old output not released on seek", sink.discardedAfterPcm);
@@ -620,7 +770,7 @@ public class ResolvedUrlPlaybackTest {
         }
     }
 
-    private static class PcmOutput extends ForwardingAudioOutput {
+    static class PcmOutput extends ForwardingAudioOutput {
         private final List<double[]> windows = new ArrayList<>();
         private final int sampleRate;
         private final double startSeconds;
@@ -689,9 +839,13 @@ public class ResolvedUrlPlaybackTest {
         }
 
         synchronized List<double[]> consumedWindows() {
+            return consumedWindows(consumedUs);
+        }
+
+        synchronized List<double[]> consumedWindows(long playedUs) {
             List<double[]> consumed = new ArrayList<>();
             for (double[] window : windows) {
-                if (window[0] + 0.25 < consumedUs / 1000000.0) {
+                if (window[0] + 0.25 < playedUs / 1000000.0) {
                     consumed.add(window);
                 }
             }

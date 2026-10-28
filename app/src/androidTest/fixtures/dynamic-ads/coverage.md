@@ -48,16 +48,17 @@ correspond to program times 73, 103 and 83 seconds.
 
 | Priority | Behavior | Incomplete fix it challenges | Required outcome / limitation |
 | --- | --- | --- | --- |
+| Added | Identical bytes, different URLs | Treats URL change as corruption | Successful coherent playback; any cache strategy permitted |
 | Existing | Different resolved URL after player/cache recreation | Original-enclosure cache identity | Coherent A or B, never byte mixing |
 | First | Same URL, changed total length | URL-only identity | Coherent audio; detectable change is not silently joined |
 | First | Same-player interruption, stable content | Restart-only correctness | Reconnect and consume unchanged A |
 | First | Backward/forward seeking after switch | Clears spans but retains wrong coordinates | Selected content reachable at each target |
-| Next | Same URL and same length, changed audio | Length-only invalidation | Separate generated equal-length fixture; disclose absent validators and limits on detecting mutation |
+| Added | Same URL and same length, changed audio | Length-only invalidation | Tagged integrity case permits one change; seek recovery for this mutation remains separate |
 | Next | Partial eviction, then seek/refill | Assumes cached ranges are permanent | Correct content across a measured hole; cache setup isolated from outcome |
 | Next | Complete eviction and process/player recreation | Identity stored only with cache spans | Coherent new playback; approximate timestamp resume allowed |
 | Next | Episode larger than 100 MB | Assumes one episode fits in cache | Correct playback/refill while real LRU evicts; no larger cache injected |
 | Next | A expires, original now selects B | Pins an unavailable URL forever | Clean B source and seekable content; automatic retry count/timing is a recovery policy |
-| Next | HEAD selects A, GET selects B | Treats HEAD as identity proof | GET-selected content must be coherent; no assumption that URLs alone prove bytes |
+| Added | HEAD selects A, GET selects B | Treats HEAD as identity proof | Tagged integrity case permits one change; does not establish later seek recovery |
 | Next | Range request gets full 200 | Treats new file as old byte coordinates | Correct range fallback or explicit failure, not silent content corruption |
 | Next | Premature EOF, stable and changed content | Mistakes truncation for episode ending | Distinguish recoverable transport failure from genuine end; recovery policy explicit |
 | Later | Two concrete overlapping cache users | Racy first resolution or conflicting writes | Deterministic shared-cache setup first; do not invent a concurrency framework |
@@ -245,57 +246,63 @@ Evidence is under `/workspace/antennapod-validation/equal-length-fixture/`.
 No new mutation/recovery playback acceptance or seek-oracle change is included
 in this step; those remain dependent on the implementation-neutral observer review.
 
-## Segment classifier under review
+## Tagged observation and target recovery
 
-`ResolvedContentOracle` intersects A/B/C candidates across every consumed window
-of a complete program segment. B and C remain indistinguishable in these shared
-program windows. Empty evidence and any segment with no single compatible edition
-produce no candidate. This is restricted to the generated post-ad program, not
-a classifier for the fixtures' tones or arbitrary podcast audio.
+The candidate-mask experiment and its 823,543-combination check are preserved in
+commit `9e3da6a`. Its unused helper and tests have been removed. The new path uses
+one generator with explicit band/timing settings and the existing zero-crossing
+estimator. The original A/B/C hashes remain unchanged.
 
-The sequence helper permits at most one edition transition in the first target
-pass, then intersects one final edition across exactly one complete replay.
-Nine observation-level tests cover coherent segments, clean transitions,
-ambiguity, mixed windows, alternating regions, replay mismatch, prior corruption
-and incomplete replay. These are oracle checks, not real playback evidence.
-Independent explicit edition-sequence enumeration matched the Java helper for
-823,543 candidate combinations.
+In program regions, a 500–2000 Hz sweep identifies A; 3500–5000 Hz identifies B.
+The checks do not interpret the fixed ad tones as program markers. The same band and
+timing settings describe identical content; the harmless switch control simply
+serves the same generated file under both routes. Tagging changes program bytes
+throughout, so these cases supplement rather than replace the shared-program
+fixtures when judging overlap-based fixes.
 
-The classifier is not wired into playback acceptance yet. The current observer
-maps a known start plus accepted PCM frames onto an output-relative playback head.
-Expected seek flush/reuse needs an archived consumed snapshot and a new output
-clock origin, not merely cleared counters. An unrequested replacement also needs
-a verified media-time anchor for the new output. Media3 exposes the renderer
-stream offset only through protected BaseRenderer methods; the public output
-position is output-relative. A Player seek discontinuity is reported through
-optimistically updated playback state and is not proof that the renderer has
-flushed. Treating either callback alone as an epoch boundary could mislabel old
-queued audio or lose already consumed corruption.
+The observer compares accepted PCM frames with the public AudioTrack playback
+head, retaining played windows before flush/release and starting a new epoch on
+reuse or replacement. It does not alter playback's clock. An initial control
+caught a 73.56 ms regression in Media3's smoothed position estimate; that failed
+experiment is retained separately. The hardware frame counter avoids relying on
+that estimate for the new cases. Observations are mono PCM at 1x, with one active
+output and short intervals before EOF; drain-to-stop and counter wrap are not
+covered. Flush/reuse has a fake-output control; real ordinary seeks exercised
+replacement without changing the player's track selection.
 
-Observer changes and the two new mutation playback cases are stopped at that
-contract, rather than guessing an offset or claiming implementation-neutral
-recovery acceptance. The smallest bounded alternative is one pending record for
-a harness-requested seek: old output, known target and retained consumed windows;
-complete it on actual flush or replacement. Unanchored app-driven replacements
-would remain explicitly unmeasured until a public anchoring contract is verified.
-No production code, existing observer, frozen assertion or deadline changed here.
+A quarter-second window containing both sweeps has an ambiguous program
+coordinate. The oracle permits one such window at the single allowed edition
+change, retains it and logs its index. All remaining windows must fit progression
+within their uninterrupted segment. A fixed target replay must fit the final
+edition. Small per-window errors cannot accumulate into a large undetected jump.
+Stable decoder controls at all six edition/target combinations measured a worst
+error of 0.689 seconds and establish a one-second tagged target tolerance; the
+frozen assertion is still 0.25 seconds. These tests establish the requested
+intervals, not exact resume time or access to every possible passage.
 
-Classifier validation: debug builds and focused Checkstyle passed. On-device
-logcat records all 28 cases finished, 25 passed, three content failures and zero
-ignored. The failures were the existing same-URL, frozen restart and selected-
-edition seek regressions. The outer 600-second shell bound expired during the
-last service case (status 124), so its runner output lacks the final summary;
-a subsequent logcat snapshot records that case completing and the aggregate
-result. No per-test deadline was changed and no per-test setup timeout occurred.
-Evidence and hashes are under `/workspace/antennapod-validation/oracle-controls/`.
+The complete 31-case run finished in 890.082 seconds with 27 passes, four content
+failures, no skips and no setup failure; outer shell status was zero and the
+terminal runner result was preserved. The three existing content regressions
+remained red. The new target case consumed A, then B, then cached A after seeking;
+a later CacheDataSource source error did not erase that prior evidence. Both new
+initial integrity cases passed with one change. Those passes do not establish
+same-URL or HEAD/GET seek recovery. The older selected-edition seek test remains
+a narrower research case, not the new path's acceptance rule.
 
-A separate generated fixture family could avoid the media-anchor dependency for
-semantic identity by assigning each edition a disjoint sweep band. Frequency
-would then identify edition and program position directly. Guard bands within
-the MP3 passband are preferable to adjoining bands or a 20 kHz endpoint. The
-original A/B fixtures and measured-behavior regression must remain unchanged.
-This is a proposed simplification, not implemented or validated audio evidence.
-Played-window gating still needs output-relative frame accounting, correct
-partial-write handling and preserved consumed snapshots across flush/release.
-Seek accuracy additionally needs the fixture's known edition-specific mapping
-from requested media time to program time and validated decoder trimming.
+The full-run source tree and APK hash are recorded with its logs. A subsequent
+small refinement anchors progression to the beginning of each segment and
+calibrates the exact program targets 73, 103 and 83. The final 13-case affected
+suite finished in 285.728 seconds: 12 passes and only the repeated-edition seek
+failure. A further three-case repeat took 176.407 seconds with the same two
+integrity passes and seek failure. All terminal shell statuses were zero; JUnit
+failures remained visible. No setup timeout or explicit safe rejection occurred
+in these qualifications. The earlier priming timeout remains a recorded historical
+limitation, not a demonstrated resolved cause.
+
+Debug app/instrumentation builds and focused Checkstyle passed. All six generated
+files reproduced byte-for-byte, had valid complete MP3 frame sequences and fully
+decoded; FFmpeg only reported the expected tagless-duration estimation warning.
+Original A/B/C hashes and frozen test/assertion bodies were verified unchanged.
+No release or hosted run was made for this increment. A narrow test-only keep
+rule retains the public AudioTrack accessor for later release qualification.
+Evidence is under `/workspace/antennapod-validation/tagged/`.
