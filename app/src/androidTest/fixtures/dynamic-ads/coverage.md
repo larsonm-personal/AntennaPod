@@ -202,3 +202,45 @@ setup timeout remains recorded; these passing setups do not erase it. No
 production code, server staging, timeout or content tolerance was changed in
 this follow-up. The frozen test methods, restart/content assertion helpers and cancellation
 barrier remain identical.
+
+## Prepared integrity scenarios
+
+The same-length fixture and HEAD/GET disagreement server controls are prepared
+and self-checked separately from playback acceptance. Existing A/B generation
+is byte-for-byte unchanged. C has A's 4,370,390-byte length and 6,971 frames, but
+its decoded samples match B and differ from A at 75, 85 and 105 seconds. Its
+additional closing segment is synthetic. Complete decoding produced no warnings.
+
+The planned integrity outcomes are coherent playback, explicit safe rejection,
+silent content corruption, and setup failure/timeout. Rejection cannot erase
+corrupt audio consumed before the error; it is not successful recovery and does
+not satisfy seekability. Stable controls still require playback. Availability
+and automatic recovery remain separate coverage. A no-validator same-length
+mutation case must not be described as a universal mutation detector.
+
+The existing additional seek result is narrower than its method name: it checks
+three timestamps against the edition selected before those seeks. It does not
+prove that no other rewind location can reach the passage, and currently can
+reject a legitimate whole-source edition change during a later seek. That
+acceptance rule and the expected-output-replacement requirement remain under
+review. Whole-segment edition candidates, one allowed transition, and one fixed
+replay of the target list are a candidate refinement; independent choices for
+each PCM window would conceal byte mixing and are not acceptable. Supporting an
+expected flush as well as replacement must preserve already consumed evidence.
+The frozen regression remains unchanged.
+
+Fixture/server qualification on the API 30 software emulator: debug app and
+instrumentation builds plus focused Checkstyle passed. The corrected 12-case run
+had 11 passes and only the frozen mixed-content failure (about 60.055 seconds).
+All eight server checks, stable restart, completed download and straight C
+playback passed. The three new HTTP checks each passed two further runs.
+
+The first run exposed two server self-check failures: after a ranged request,
+a full GET inherited Range on a reused connection and incorrectly returned 206.
+The bundled NanoHTTPD 2.1.1 reuses its header map without clearing it. Consuming
+and removing Range in this handler fixes that leak; a raw-socket check uses one
+connection to make the regression deterministic. Existing request/PCM assertions
+were not changed, and the frozen content failure persisted after this correction.
+Evidence is under `/workspace/antennapod-validation/equal-length-fixture/`.
+No new mutation/recovery playback acceptance or seek-oracle change is included
+in this step; those remain dependent on the implementation-neutral observer review.

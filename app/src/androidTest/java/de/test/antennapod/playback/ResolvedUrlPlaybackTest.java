@@ -212,6 +212,20 @@ public class ResolvedUrlPlaybackTest {
     }
 
     @Test
+    public void equalLengthFixturePlaysCoherentProgram() throws Exception {
+        File equalLength = copyAsset("resolved-equal-length.mp3");
+        try {
+            assertEquals(initial.length(), equalLength.length());
+            server.replaceAWith(equalLength);
+            playResolved(MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original"), RESUME_MS);
+            awaitResolvedContent();
+            assertConsumedContent("stable equal-length fixture", CHANGED_AD_SECONDS);
+        } finally {
+            equalLength.delete();
+        }
+    }
+
+    @Test
     public void sameResolvedUrlLengthChangeDoesNotMixContent() throws Exception {
         MediaItem media = primeCachedEpisode();
         server.replaceAWithB();

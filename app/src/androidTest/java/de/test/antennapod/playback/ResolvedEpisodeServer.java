@@ -27,7 +27,8 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile CountDownLatch responseGate = new CountDownLatch(0);
     private volatile int throttleAfter;
     private volatile boolean prefixSent;
-    private volatile boolean replaceA;
+    private volatile File replacementA;
+    private volatile boolean redirectAGets;
     private volatile int connectionGeneration;
     private volatile int interruptedResponses;
 
@@ -61,7 +62,15 @@ public class ResolvedEpisodeServer extends HTTPBin {
     }
 
     public void replaceAWithB() {
-        replaceA = true;
+        replaceAWith(changed);
+    }
+
+    public void replaceAWith(File replacement) {
+        replacementA = replacement;
+    }
+
+    public void redirectGetsFromAToB() {
+        redirectAGets = true;
     }
 
     public void disconnectActiveResponses() {
@@ -113,11 +122,12 @@ public class ResolvedEpisodeServer extends HTTPBin {
     @Override
     public Response serve(IHTTPSession session) {
         String name = session.getUri().replace("/resolved-ad/", "");
-        String range = session.getHeaders().get("range");
+        String range = session.getHeaders().remove("range");
         synchronized (this) {
             requests.add(session.getMethod() + " " + name + " " + range);
         }
-        if (name.equals("original")) {
+        boolean redirectGet = redirectAGets && name.equals("A") && session.getMethod() == Method.GET;
+        if (name.equals("original") || redirectGet) {
             Response response = new Response(new Response.IStatus() {
                 @Override
                 public int getRequestStatus() {
@@ -129,13 +139,16 @@ public class ResolvedEpisodeServer extends HTTPBin {
                     return "302 Found";
                 }
             }, "text/plain", "");
-            response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + resolved);
+            response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + (redirectGet ? "B" : resolved));
             return response;
         }
         if (!name.equals("A") && !name.equals("B")) {
             return new Response(Response.Status.NOT_FOUND, "text/plain", "");
         }
-        File file = name.equals("A") && !replaceA ? initial : changed;
+        File file = name.equals("A") ? initial : changed;
+        if (name.equals("A") && replacementA != null) {
+            file = replacementA;
+        }
         long start = 0;
         long end = file.length() - 1;
         if (range != null) {

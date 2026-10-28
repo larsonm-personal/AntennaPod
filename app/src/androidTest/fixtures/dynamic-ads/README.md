@@ -11,6 +11,23 @@ at program second five. B has two seconds there; A has an additional 2,299 MP3 f
 (60.055510204 seconds). The files use 192 kbps, 44.1 kHz MPEG-1 layer III. Placement
 and a single shortened segment are assumptions, not recovered server behavior.
 
+The additional `resolved-equal-length` fixture has B's two-second opening segment
+and a 60.055510204-second closing tone after the program. It has exactly A's byte
+length and frame count while matching B's program at the current observation
+and seek targets. This relocated segment is a synthetic robustness fixture, not
+an inference about the captured server. Generation checks encoded length; full
+frame/decode checks and two clean generations also verified unchanged A/B bytes.
+
+Optional server controls are separate from the default immutable A/B scenario.
+`replaceAWith(file)` changes the bytes served at A, including same-length data
+without validators. `redirectGetsFromAToB()` keeps HEAD A unchanged while GET A
+redirects to B, including ranged requests. This exercises HEAD/GET disagreement
+at the resolved endpoint; merely redirecting GET at the original enclosure would
+not exercise a client that already replaced that URL after HEAD resolution.
+The bundled NanoHTTPD 2.1.1 retains request headers on keep-alive connections.
+This server removes each consumed Range header so a later full request does not
+inherit it. A raw-socket test checks both requests on the same connection.
+
 The first production player seeks to 70 seconds, after the synthetic segment, then
 consumes 17 seconds before cancellation. The recreated player resumes at 87 seconds.
 This avoids playing a minute of setup audio while retaining real cache population.

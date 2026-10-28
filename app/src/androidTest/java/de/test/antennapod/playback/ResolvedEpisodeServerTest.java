@@ -13,11 +13,15 @@ import java.io.InputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ResolvedEpisodeServerTest {
@@ -128,6 +132,87 @@ public class ResolvedEpisodeServerTest {
             response.disconnect();
         }
         assertArrayEquals(bytesA, read("A", null, 200));
+    }
+
+    @Test
+    public void syntheticMutationCanKeepTotalLength() throws Exception {
+        assertArrayEquals(bytesA, read("A", null, 200));
+        byte[] replacement = Arrays.copyOf(bytesB, bytesA.length);
+        File file = write(replacement);
+        try {
+            server.replaceAWith(file);
+            assertRedirect("HEAD", "A");
+            HttpURLConnection head = open("A", "HEAD", null);
+            try {
+                assertEquals(200, head.getResponseCode());
+                assertEquals(bytesA.length, head.getContentLength());
+                assertNull(head.getHeaderField("ETag"));
+                assertNull(head.getHeaderField("Last-Modified"));
+            } finally {
+                head.disconnect();
+            }
+            assertArrayEquals(replacement, read("A", null, 200));
+            assertArrayEquals(Arrays.copyOfRange(replacement, 100, 200), read("A", "bytes=100-199", 206));
+            assertArrayEquals(bytesB, read("B", null, 200));
+        } finally {
+            file.delete();
+        }
+    }
+
+    @Test
+    public void syntheticHeadAndGetCanSelectDifferentBytes() throws Exception {
+        assertArrayEquals(bytesA, read("A", null, 200));
+        server.redirectGetsFromAToB();
+        assertRedirect("HEAD", "A");
+        HttpURLConnection head = open("A", "HEAD", null);
+        HttpURLConnection get = open("A", "GET", "bytes=100-");
+        try {
+            assertEquals(200, head.getResponseCode());
+            assertEquals(bytesA.length, head.getContentLength());
+            assertEquals(302, get.getResponseCode());
+            assertTrue(get.getHeaderField("Location").endsWith("/B"));
+        } finally {
+            head.disconnect();
+            get.disconnect();
+        }
+        assertArrayEquals(bytesB, read("B", null, 200));
+        HttpURLConnection followed = open("A", "GET", "bytes=100-");
+        followed.setInstanceFollowRedirects(true);
+        try (InputStream input = followed.getInputStream()) {
+            assertEquals(206, followed.getResponseCode());
+            assertEquals("bytes 100-3999/4000", followed.getHeaderField("Content-Range"));
+            assertArrayEquals(Arrays.copyOfRange(bytesB, 100, bytesB.length), IOUtils.toByteArray(input));
+        } finally {
+            followed.disconnect();
+        }
+    }
+
+    @Test
+    public void rangeHeaderDoesNotLeakAcrossKeepAliveRequests() throws Exception {
+        try (Socket socket = new Socket("127.0.0.1", server.getListeningPort())) {
+            socket.setSoTimeout(5000);
+            socket.getOutputStream().write(("GET /resolved-ad/A HTTP/1.1\r\nHost: localhost\r\n"
+                    + "Range: bytes=100-199\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            assertSocketResponse(socket.getInputStream(), 206, Arrays.copyOfRange(bytesA, 100, 200));
+            socket.getOutputStream().write(("GET /resolved-ad/B HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            assertSocketResponse(socket.getInputStream(), 200, bytesB);
+        }
+    }
+
+    private void assertSocketResponse(InputStream input, int status, byte[] expected) throws Exception {
+        StringBuilder header = new StringBuilder();
+        while (!header.toString().endsWith("\r\n\r\n")) {
+            int next = input.read();
+            assertTrue("Response header ended early", next != -1);
+            assertTrue("Response header exceeds 8 KB", header.length() < 8192);
+            header.append((char) next);
+        }
+        assertTrue(header.toString(), header.toString().startsWith("HTTP/1.1 " + status + " "));
+        assertTrue(header.toString().toLowerCase(Locale.ROOT).contains("content-length: " + expected.length + "\r\n"));
+        byte[] body = new byte[expected.length];
+        IOUtils.readFully(input, body);
+        assertArrayEquals(expected, body);
     }
 
     private void assertThrottledResponse(int start) throws Exception {
