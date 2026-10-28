@@ -16,6 +16,9 @@ import androidx.media3.datasource.cache.SimpleCache;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.PlayerMessage;
 import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
+import androidx.media3.exoplayer.source.LoadEventInfo;
+import androidx.media3.exoplayer.source.MediaLoadData;
 import androidx.media3.exoplayer.audio.AudioOutput;
 import androidx.media3.exoplayer.audio.AudioOutputProvider;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
@@ -41,10 +44,14 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -68,6 +75,9 @@ public class ResolvedUrlPlaybackTest {
     private double observationBoundary = 90;
     private long observationEndMs = MIN_OBSERVATION_END_MS;
     private final List<FileObserver> fileObservers = new ArrayList<>();
+    private final Set<Long> activeLoads = new HashSet<>();
+    private Throwable loadError;
+    private boolean mediaLoadObserved;
     private Context context;
     private ExoPlayer player;
     private volatile PcmOutput sink;
@@ -154,6 +164,7 @@ public class ResolvedUrlPlaybackTest {
                 () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
         watchCache(new File(context.getCacheDir(), "streaming"));
         logCacheFiles("before stop", new File(context.getCacheDir(), "streaming"));
+        awaitLoaderClosed();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.stop());
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             player.release();
@@ -215,7 +226,42 @@ public class ResolvedUrlPlaybackTest {
         sink = null;
         outputRecreated = false;
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            activeLoads.clear();
+            loadError = null;
+            mediaLoadObserved = false;
             player = ExoPlayerUtils.buildPlayer(context);
+            player.addAnalyticsListener((AnalyticsListener) Proxy.newProxyInstance(
+                    AnalyticsListener.class.getClassLoader(), new Class<?>[] {AnalyticsListener.class},
+                    (listener, method, arguments) -> {
+                        String name = method.getName();
+                        if (name.equals("hashCode")) {
+                            return System.identityHashCode(listener);
+                        }
+                        if (name.equals("equals")) {
+                            return listener == arguments[0];
+                        }
+                        if (name.equals("toString")) {
+                            return "LoadCompletionListener";
+                        }
+                        if (name.equals("onLoadError")) {
+                            loadError = (Throwable) arguments[3];
+                        }
+                        if ((name.equals("onLoadStarted") && arguments.length == 4)
+                                || name.equals("onLoadCanceled") || name.equals("onLoadCompleted")) {
+                            LoadEventInfo info = (LoadEventInfo) arguments[1];
+                            MediaLoadData data = (MediaLoadData) arguments[2];
+                            if (data.dataType == C.DATA_TYPE_MEDIA) {
+                                if (name.equals("onLoadStarted")) {
+                                    mediaLoadObserved = true;
+                                    activeLoads.add(info.loadTaskId);
+                                } else {
+                                    activeLoads.remove(info.loadTaskId);
+                                }
+                                Log.i(TAG, name + " task=" + info.loadTaskId + " active=" + activeLoads);
+                            }
+                        }
+                        return null;
+                    }));
             AudioOutputProvider provider = new ForwardingAudioOutputProvider(
                     new AudioTrackAudioOutputProvider.Builder(context).build()) {
                 @Override
@@ -245,6 +291,26 @@ public class ResolvedUrlPlaybackTest {
             player.prepare();
             player.play();
         });
+    }
+
+    private void awaitLoaderClosed() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            assertTrue("No media load observed", mediaLoadObserved);
+            player.pause();
+            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build());
+        });
+        AtomicBoolean closed = new AtomicBoolean();
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                assertNull("Load failed", loadError);
+                assertNull("Player error", player.getPlayerError());
+                closed.set(!player.getCurrentTracks().isTypeSelected(C.TRACK_TYPE_AUDIO) && activeLoads.isEmpty());
+            });
+            return closed.get();
+        });
+        Log.i(TAG, "loaderClosedBeforeRelease=true");
+        logCacheFiles("after loader closed", new File(context.getCacheDir(), "streaming"));
     }
 
     private void awaitResolvedContent() {

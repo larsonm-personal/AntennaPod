@@ -625,3 +625,46 @@ A second local release service run passed both cases (75.984 seconds), including
 saved 17,173 ms to restored 16,373 ms. Neither these results nor the hosted matrix
 freeze the test or establish the user's actual lifecycle trigger. PR #8441 remains
 uninspected.
+
+## Cache shutdown investigation (2026-10-28)
+
+Temporary file observers on the research branch showed that the first player's
+cache file could still grow after both player release and cache release returned.
+In one run, the tail file was 604,160 bytes after release, grew to 623,815 bytes,
+and closed about 100 ms later. The probe then saw the final length and playback
+mixed A and B. All six initial instrumented runs showed growth after release,
+including three runs after clearing the emulator's app data. Dirty persisted app
+data is therefore not required for this shutdown race.
+
+A separate six-run experiment computed the fixture's resume-byte offset before
+playback, moving the cache probe earlier without changing playback or responses.
+All six still mixed A and B. Neither batch captured stale-span deletion or the
+coherent-B pass seen in hosted CI. The old writer can outlive release; attributing
+that hosted pass to a subsequently deleted stale span remains an inference.
+
+The setup correction pauses the first player, disables its audio track, and waits
+for actual track deselection plus terminal events for all tracked media loads.
+Only then does it release the player and cache. Media3 1.10.0's
+[selectTracks](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/source/ProgressiveMediaPeriod.java#L378)
+cancels loading without releasing the period when no tracks remain selected;
+[continueLoading](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/source/ProgressiveMediaPeriod.java#L433)
+prevents another load in that state. The non-release cancellation callback
+[follows load completion](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/upstream/Loader.java#L123);
+the load
+[closes its data source in finally](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/source/ProgressiveMediaPeriod.java#L1255).
+A cancellation callback after stop/release has no such guarantee.
+
+Six instrumented release runs with this barrier closed the original tail file
+before release, retained matching physical and recorded lengths, and recorded no
+subsequent writes to that file. All six reached the unchanged content assertion
+with 33 or 34 A windows before the boundary, 9 or 10 B windows afterward, and
+maximum A error about 60.0567 seconds. Three ran with existing app data and three
+after clearing it. This validates the known shutdown correction locally; it does
+not establish the complete cause of the earlier hosted pass.
+
+The combined research run completed nine tests in one process: the three HTTP
+checks, stable resolution, empty-cache B, completed download and both service
+checks passed. Only mixed-content playback failed, at the consumed-audio assertion.
+[Diagnostic transcripts and complete runner results](evidence/cacheShutdown20261028.txt)
+retain the baseline and barrier measurements, with hashes of the full local logs.
+The minimal review branch excludes these file observers and the precompute experiment.

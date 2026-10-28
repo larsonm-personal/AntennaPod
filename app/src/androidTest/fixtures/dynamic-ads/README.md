@@ -14,6 +14,9 @@ and a single shortened segment are assumptions, not recovered server behavior.
 The first production player seeks to 70 seconds, after the synthetic segment, then
 consumes 17 seconds before cancellation. The recreated player resumes at 87 seconds.
 This avoids playing a minute of setup audio while retaining real cache population.
+Before cache recreation, the test pauses, deselects audio, and waits for its active
+media loads to finish or cancel. Player release alone can return before the cache
+writer closes.
 The test verifies every saved span against A and measures the contiguous cached range
 containing the resumed position; the initial seek may leave an earlier gap. It walks
 MP3 frames to locate the actual boundary and observes consumed audio on both sides.
@@ -35,11 +38,12 @@ filters out unconsumed windows. A flush, release or replacement after PCM invali
 the observation. Neither an internal renderer offset nor player-position logs form
 the audio oracle.
 
-`Media3ServiceRestartTest` separately checks actual service teardown, saved position
-and playback resumption. It waits for main-thread shutdown and pending database
-writes before reading the saved position. Routing is logged. It does not observe consumed service
-audio or simulate process death or a Wi-Fi/cellular handoff. The short-pause check
-requires the production 800 ms rewind within its documented time interval.
+`Media3ServiceRestartTest` checks actual service teardown and resumption from the
+final persisted position, including the normal 800 ms rewind. It does not check
+persistence accuracy against the controller's position estimate. It waits for
+main-thread shutdown and pending database writes before reading the saved position.
+Routing is logged. It does not observe consumed service audio or simulate process
+death or a Wi-Fi/cellular handoff. The rewind check uses the production short-pause interval.
 The position listener is a proxy over the public `Player.Listener` interface: a
 separately compiled listener otherwise calls default-method companions removed
 from the optimized release APK.
