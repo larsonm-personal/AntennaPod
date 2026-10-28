@@ -84,14 +84,36 @@ windows across flush/reuse and replacement, and discards queued-only windows.
 It does not reconstruct the player's media timeline. Stable decoder/seek controls
 calibrate a one-second target tolerance; the frozen oracle remains at 0.25 seconds.
 
-The new integrity cases allow one edition change. A quarter-second window crossing
-that change can contain both sweeps, so its averaged frequency has no precise
-program position. The assertion permits one such window at the boundary, retains
-it in the history and logs that uncertainty. Progression must fit on both sides. An explicit rejection is
-reported separately and cannot erase earlier corrupt audio. The seeking case
-visits three program targets, then repeats that list once in the final edition.
-It requires the actual target audio, not a position callback or request route.
-This checks those intervals, not every possible passage or exact resume time.
+The tagged cases check predetermined content samples, not continuous integrity.
+After restart they check four complete quarter-second windows at indices 4–7,
+and another four starting at `4 * (ceil(cacheEndSeconds - 87) + 1)`. The cache
+boundary is measured during priming, before the resumed playback is observed.
+For uninterrupted output these are seconds [1, 2) and [b, b+1), where
+`b = ceil(cacheEndSeconds - 87) + 1`. After each seek, only indices 4–7 are checked.
+Every selected segment must be complete, remain within one output epoch and
+edition, and follow the program sweep. Explicit seeks also require the expected
+program coordinates. One edition change between sampled segments is allowed;
+the fixed replay must stay in the final edition.
+
+Everything outside those selected windows is unasserted: startup, the interval
+around the splice, the gaps between observations, and later audio. Traces retain
+those measurements, but a pass makes no claim about them. Output replacement can
+discard a partial quarter-second window; the selection is by retained window
+ordinal, not a global media clock. A segment spanning outputs is a measurement
+failure, not permission to search for another segment. If playback explicitly
+rejects the source, all available complete prescribed segments are checked;
+missing or partial segments remain unmeasured and recovery is not established.
+The frozen continuous-content regression retains its original strict assertion.
+
+The seeking case checks integrity before proceeding to each next target, then
+repeats the target list once in the final edition. Fixed media targets 80, 110,
+and 75 seconds lie inside both files and after both ad segments. The primed A
+span covers approximately media 70–95 seconds: 80 and 75 revisit it, while 110
+is beyond it. A maps these targets to program 17.944, 47.944, and 12.944 seconds;
+B maps them to 78, 108, and 73 seconds. The next seek never depends on an edition
+inferred from potentially corrupted audio. Stable controls evaluate both mappings.
+The case checks these intervals, not every possible passage or exact resume time.
+Same-length and HEAD/GET integrity passes alone do not establish subsequent seekability.
 
 Tagging changes the program bytes throughout; it is not evidence of the captured
 server's layout or a sufficient challenge to overlap-based fixes. The original

@@ -1,7 +1,5 @@
 package de.test.antennapod.playback;
 
-import android.util.Log;
-
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.audio.AudioOutput;
@@ -47,49 +45,31 @@ final class ResolvedTaggedAudio {
         return result;
     }
 
-    static void assertIntegrity(List<Heard> history, double tolerance) {
-        int edition = -1;
-        int boundary = -1;
-        for (int index = 0; index < history.size(); index++) {
-            int next = history.get(index).edition;
-            if (next >= 0) {
-                if (edition >= 0 && next != edition) {
-                    assertTrue("Repeated edition changes in consumed audio", boundary < 0);
-                    boundary = index;
-                }
-                edition = next;
-            }
+    static List<Heard> segment(List<Heard> history, int first, double tolerance) {
+        assertTrue("Incomplete predetermined segment", history.size() >= first + 4);
+        List<Heard> segment = history.subList(first, first + 4);
+        Heard anchor = segment.get(0);
+        assertTrue("Unidentified sampled edition", anchor.edition >= 0);
+        for (int index = 0; index < segment.size(); index++) {
+            Heard window = segment.get(index);
+            assertTrue("Sampled segment changes edition or output",
+                    window.edition == anchor.edition && window.epoch == anchor.epoch);
+            assertTrue("Sampled segment has missing audio windows",
+                    Math.abs(window.outputSeconds - anchor.outputSeconds - index * 0.25) < 0.025);
+            double jump = window.program - anchor.program - window.outputSeconds + anchor.outputSeconds;
+            assertTrue("Sampled program jump=" + jump, Math.abs(jump) < tolerance);
         }
-        if (followsProgram(history, -1, tolerance)) {
-            return;
-        }
-        int uncertain = boundary >= 0 && followsProgram(history, boundary - 1, tolerance) ? boundary - 1 : boundary;
-        assertTrue("Consumed audio does not follow a coherent program, even allowing one transition window",
-                boundary >= 0 && followsProgram(history, uncertain, tolerance));
-        Log.i("ResolvedTaggedAudio", "transitionWindow=" + uncertain
-                + " retained; mixed frequencies do not identify its program position");
+        return segment;
     }
 
-    private static boolean followsProgram(List<Heard> history, int transitionWindow, double tolerance) {
-        Heard anchor = null;
-        for (int index = 0; index < history.size(); index++) {
-            if (index == transitionWindow) {
-                continue;
-            }
-            Heard window = history.get(index);
-            if (window.edition < 0) {
-                return false;
-            }
-            if (anchor == null || window.edition != anchor.edition || window.epoch != anchor.epoch) {
-                anchor = window;
-            } else {
-                double jump = window.program - anchor.program - window.outputSeconds + anchor.outputSeconds;
-                if (Math.abs(jump) >= tolerance) {
-                    return false;
-                }
+    static void assertOneChange(List<Integer> editions) {
+        int changes = 0;
+        for (int index = 1; index < editions.size(); index++) {
+            if (!editions.get(index).equals(editions.get(index - 1))) {
+                changes++;
             }
         }
-        return true;
+        assertTrue("Repeated edition changes between sampled segments", changes <= 1);
     }
 
     interface PlaybackHead {
@@ -110,6 +90,7 @@ final class ResolvedTaggedAudio {
             outputSeconds = window[0];
             this.epoch = epoch;
         }
+
     }
 
     private final class Output extends ForwardingAudioOutput {

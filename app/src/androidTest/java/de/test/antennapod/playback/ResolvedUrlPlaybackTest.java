@@ -82,6 +82,8 @@ public class ResolvedUrlPlaybackTest {
     private ExoPlayer player;
     private volatile PcmOutput sink;
     private ResolvedTaggedAudio taggedAudio;
+    private final List<Integer> sampledEditions = new ArrayList<>();
+    private boolean taggedRejected;
     private volatile boolean outputRecreated;
     private volatile PcmOutput outputBeforeSeek;
     private long seekStartMs;
@@ -304,49 +306,45 @@ public class ResolvedUrlPlaybackTest {
     }
 
     @Test
-    public void sameLengthMutationPreservesTaggedAudioIntegrity() throws Exception {
+    public void sameLengthMutationKeepsSampledContentCoherent() throws Exception {
         useTaggedFixtures(true);
         MediaItem media = primeCachedEpisode();
         server.replaceAWithB();
         taggedAudio = new ResolvedTaggedAudio();
         playResolved(media, RESUME_MS);
-        collectTaggedAudio(-1, taggedObservationWindows(), true);
-        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), true));
     }
 
     @Test
-    public void headGetDisagreementPreservesTaggedAudioIntegrity() throws Exception {
+    public void headGetDisagreementKeepsSampledContentCoherent() throws Exception {
         useTaggedFixtures(false);
         MediaItem media = primeCachedEpisode();
         server.redirectGetsFromAToB();
         taggedAudio = new ResolvedTaggedAudio();
         playResolved(media, RESUME_MS);
-        collectTaggedAudio(-1, taggedObservationWindows(), true);
-        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), true));
     }
 
     @Test
-    public void taggedSwitchKeepsTargetContentRecoverable() throws Exception {
+    public void changedEditionKeepsSampledSeekTargetsRecoverable() throws Exception {
         useTaggedFixtures(false);
         MediaItem media = primeCachedEpisode();
         server.switchFreshResolutionsToB();
         taggedAudio = new ResolvedTaggedAudio();
         playResolved(media, RESUME_MS);
-        List<ResolvedTaggedAudio.Heard> heard = collectTaggedAudio(-1, taggedObservationWindows(), false);
-        double[] targets = {73, 103, 83};
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+        double[] targets = {80, 110, 75};
         for (double target : targets) {
             int before = taggedAudio.epoch();
-            seekToProgram(heard.get(heard.size() - 1).edition, target);
-            heard = collectTaggedAudio(before, 12, false);
+            seekToMedia(target);
+            checkSample(collectTaggedAudio(before, 12, false), 4, target);
         }
-        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
-        int finalEdition = heard.get(heard.size() - 1).edition;
+        int finalEdition = sampledEditions.get(sampledEditions.size() - 1);
         for (double target : targets) {
             int before = taggedAudio.epoch();
-            seekToProgram(finalEdition, target);
-            assertTaggedTarget(collectTaggedAudio(before, 12, false), finalEdition, target);
+            seekToMedia(target);
+            assertEquals(finalEdition, checkSample(collectTaggedAudio(before, 12, false), 4, target));
         }
-        ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
     }
 
     @Test
@@ -357,13 +355,12 @@ public class ResolvedUrlPlaybackTest {
             playResolved(MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/" + edition), RESUME_MS);
             collectTaggedAudio(-1, 12, false);
             int source = edition.equals("A") ? 0 : 1;
-            for (double target : new double[] {73, 103, 83}) {
+            for (double target : new double[] {80, 110, 75}) {
                 int before = taggedAudio.epoch();
-                seekToProgram(source, target);
+                seekToMedia(target);
                 List<ResolvedTaggedAudio.Heard> heard = collectTaggedAudio(before, 12, false);
-                assertTaggedTarget(heard, source, target);
+                assertEquals(source, checkSample(heard, 4, target));
             }
-            ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
             cancelLoadingAndWait();
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
                 player.release();
@@ -404,33 +401,47 @@ public class ResolvedUrlPlaybackTest {
             Log.i(TAG, "tagged epoch=" + window.epoch + " source=" + window.edition
                     + " program=" + window.program + " output=" + window.outputSeconds);
         }
-        if (rejected.get()) {
-            ResolvedTaggedAudio.assertIntegrity(taggedAudio.heard(), TAGGED_TOLERANCE_SECONDS);
-        }
+        taggedRejected = rejected.get();
         Log.i(TAG, "tagged outcome=" + (rejected.get() ? "explicit rejection; recovery not established"
-                : "played audio; integrity checked separately") + " windows=" + heard.size());
+                : "played audio; predetermined segments checked separately") + " windows=" + heard.size());
         assertTrue("Stable playback rejected", allowRejection || !rejected.get());
         return heard;
     }
 
-    private void seekToProgram(int edition, double target) {
-        long position = Math.round((target + (edition == 0 ? INITIAL_AD_SECONDS : CHANGED_AD_SECONDS)) * 1000);
+    private void seekToMedia(double target) {
+        long position = Math.round(target * 1000);
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             player.seekTo(position);
             player.play();
         });
     }
 
-    private void assertTaggedTarget(List<ResolvedTaggedAudio.Heard> heard, int source, double target) {
-        assertTrue("Insufficient played target audio", heard.size() >= 8);
-        double worst = 0;
-        double origin = heard.get(0).outputSeconds;
-        for (ResolvedTaggedAudio.Heard window : heard) {
-            assertEquals("Unexpected edition at target", source, window.edition);
-            worst = Math.max(worst, Math.abs(window.program - (target + window.outputSeconds - origin + 0.125)));
+    private void checkRestartSamples(List<ResolvedTaggedAudio.Heard> heard) {
+        int afterBoundary = 4 * ((int) Math.ceil(observationBoundary - RESUME_MS / 1000.0) + 1);
+        for (int first : new int[] {4, afterBoundary}) {
+            if (heard.size() >= first + 4) {
+                checkSample(heard, first, Double.NaN);
+            } else {
+                assertTrue("Missing predetermined restart segment", taggedRejected);
+                Log.i(TAG, "Rejected before complete sampled segment " + first + "; recovery not established");
+            }
         }
-        Log.i(TAG, "tagged stable target=" + target + " source=" + source + " maxError=" + worst);
-        assertTrue("Tagged target calibration error=" + worst, worst < TAGGED_TOLERANCE_SECONDS);
+    }
+
+    private int checkSample(List<ResolvedTaggedAudio.Heard> heard, int first, double mediaStart) {
+        List<ResolvedTaggedAudio.Heard> segment = ResolvedTaggedAudio.segment(heard, first, TAGGED_TOLERANCE_SECONDS);
+        int source = segment.get(0).edition;
+        for (ResolvedTaggedAudio.Heard window : segment) {
+            if (!Double.isNaN(mediaStart)) {
+                double expected = mediaStart + window.outputSeconds
+                        - (source == 0 ? INITIAL_AD_SECONDS : CHANGED_AD_SECONDS);
+                assertTrue("Incorrect sampled seek content", Math.abs(window.program - expected) < TAGGED_TOLERANCE_SECONDS);
+            }
+        }
+        sampledEditions.add(source);
+        ResolvedTaggedAudio.assertOneChange(sampledEditions);
+        Log.i(TAG, "sampled segment first=" + first + " source=" + source + " mediaStart=" + mediaStart);
+        return source;
     }
 
     private void awaitPrimedAudio() {

@@ -88,45 +88,55 @@ public class ResolvedTaggedAudioTest {
     }
 
     @Test
-    public void cleanOneTimeEditionTransitionIsAccepted() {
-        ResolvedTaggedAudio.assertIntegrity(Arrays.asList(
-                heard(0, 0, 20), heard(0, 0.25, 20.25),
-                heard(1, 0, 80), heard(1, 0.25, 80.25)), 0.25);
+    public void completeSegmentFollowsOneEdition() {
+        assertEquals(4, ResolvedTaggedAudio.segment(Arrays.asList(
+                heard(0, 1.125, 20.125), heard(0, 1.375, 20.375),
+                heard(0, 1.625, 20.625), heard(0, 1.875, 20.875)), 0, 0.25).size());
+    }
+
+    @Test(expected = AssertionError.class)
+    public void wrongPositionInsideSelectedSegmentIsRejected() {
+        ResolvedTaggedAudio.segment(Arrays.asList(
+                heard(0, 1.125, 20.125), heard(0, 1.375, 40.375),
+                heard(0, 1.625, 20.625), heard(0, 1.875, 20.875)), 0, 1);
+    }
+
+    @Test(expected = AssertionError.class)
+    public void incompleteSegmentCannotCountAsMeasured() {
+        ResolvedTaggedAudio.segment(Arrays.asList(heard(0, 1.125, 20.125)), 0, 1);
+    }
+
+    @Test(expected = AssertionError.class)
+    public void missingWindowCannotCountAsCompleteSegment() {
+        ResolvedTaggedAudio.segment(Arrays.asList(
+                heard(0, 1.125, 20.125), heard(0, 1.625, 20.625),
+                heard(0, 1.875, 20.875), heard(0, 2.125, 21.125)), 0, 1);
+    }
+
+    @Test(expected = AssertionError.class)
+    public void segmentCannotStraddleAnEditionChange() {
+        ResolvedTaggedAudio.segment(Arrays.asList(
+                heard(0, 1.125, 20.125), heard(0, 1.375, 20.375),
+                heard(0, 1.625, 80.625), heard(0, 1.875, 80.875)), 0, 1);
     }
 
     @Test
-    public void oneSplitWindowDoesNotInventAProgramPosition() throws Exception {
-        ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
-        FakeOutput device = new FakeOutput();
-        AudioOutput output = audio.wrap(device.output(), () -> device.position * 44100 / 1000000);
-        ByteBuffer first = sweep(500);
-        first.limit(49612 * 2);
-        output.write(first, 1, 0);
-        output.write(sweep(4500), 1, 0);
-        device.position = 4000000;
-        List<ResolvedTaggedAudio.Heard> heard = audio.heard();
-        assertEquals(-1, heard.get(4).edition);
-        assertEquals(15, heard.size());
-        ResolvedTaggedAudio.assertIntegrity(heard, 1);
+    public void oneChangeBetweenCompleteSegmentsIsAllowed() {
+        ResolvedTaggedAudio.assertOneChange(Arrays.asList(0, 0, 1, 1, 1));
     }
 
     @Test(expected = AssertionError.class)
-    public void revisitingPatchworkDoesNotBecomeCoherent() {
-        ResolvedTaggedAudio.assertIntegrity(Arrays.asList(
-                heard(0, 0, 20), heard(1, 0, 80), heard(2, 0, 20)), 0.25);
+    public void laterCleanSegmentCannotEraseRepeatedChanges() {
+        ResolvedTaggedAudio.assertOneChange(Arrays.asList(0, 1, 0, 1, 1));
     }
 
-    @Test(expected = AssertionError.class)
-    public void laterCleanAudioDoesNotEraseAnEarlierJump() {
-        ResolvedTaggedAudio.assertIntegrity(Arrays.asList(
-                heard(0, 0, 20), heard(0, 0.25, 40), heard(0, 0.5, 40.25),
-                heard(0, 0.75, 40.5), heard(1, 0, 80)), 0.25);
-    }
-
-    @Test(expected = AssertionError.class)
-    public void smallErrorsCannotAccumulateAcrossAContinuousSegment() {
-        ResolvedTaggedAudio.assertIntegrity(Arrays.asList(
-                heard(0, 0, 20), heard(0, 0.5, 20), heard(0, 1, 20), heard(0, 1.5, 20)), 1);
+    @Test
+    public void unsampledAudioIsRetainedButNotClassified() {
+        List<ResolvedTaggedAudio.Heard> history = Arrays.asList(
+                heard(0, 0.875, 40), heard(0, 1.125, 20.125), heard(0, 1.375, 20.375),
+                heard(0, 1.625, 20.625), heard(0, 1.875, 20.875));
+        ResolvedTaggedAudio.segment(history, 1, 0.25);
+        assertEquals(40, history.get(0).program, 0);
     }
 
     private static ResolvedTaggedAudio.Heard heard(int epoch, double output, double program) {

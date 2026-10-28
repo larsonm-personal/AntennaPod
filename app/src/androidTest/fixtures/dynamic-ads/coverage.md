@@ -246,7 +246,7 @@ Evidence is under `/workspace/antennapod-validation/equal-length-fixture/`.
 No new mutation/recovery playback acceptance or seek-oracle change is included
 in this step; those remain dependent on the implementation-neutral observer review.
 
-## Tagged observation and target recovery
+## Earlier tagged observation experiment (superseded)
 
 The candidate-mask experiment and its 823,543-combination check are preserved in
 commit `9e3da6a`. Its unused helper and tests have been removed. The new path uses
@@ -306,3 +306,31 @@ Original A/B/C hashes and frozen test/assertion bodies were verified unchanged.
 No release or hosted run was made for this increment. A narrow test-only keep
 rule retains the public AudioTrack accessor for later release qualification.
 Evidence is under `/workspace/antennapod-validation/tagged/`.
+
+## Predetermined sampled-content checks
+
+The boundary exemptions above were removed after a pure corrupt window could be
+excused and local PCM diagnosis showed MP3 decoder transients at mixed-byte joins.
+The captured output matched an offline decode of the reconstructed mixed file;
+the transient is not a program timestamp. The subwindow experiment and raw PCM
+remain in `/workspace/antennapod-validation/pcm-diagnostic/`, outside the test patch.
+
+The current tagged path checks fixed complete one-second segments before/after
+the primed boundary and after fixed media seeks to 80, 110 and 75 seconds. See
+README.md for the exact indices and unsampled regions. It permits one sampled
+edition change and requires stable replay. It is deliberately a sampled-content
+and recovery check, not a claim that intervening audio is uncorrupted. The original
+continuous-content regression and identical-content control remain unchanged.
+
+API 30 software-emulator qualification of this sampled path: debug focused checks
+finished with 13/15 passes, the repeated-edition content failure, and one priming
+timeout before mutation. A bounded repeat of that setup also timed out; its cause
+is not established. Release focused checks after reboot passed 14/15, failing only
+on repeated sampled editions. The complete release suite passed 31/35: the four
+failures were the original mixed-content regression, same-URL length change,
+sampled A→B→A seeking, and the older selected-edition seek assertion. No setup,
+observation timeout, skip, or linkage failure occurred in that full release run.
+These release results do not explain or erase the debug setup failures. Terminal
+runner output and environment diagnostics are preserved under
+`/workspace/antennapod-validation/sampled-segments/` and the `sampled-*` logs under
+`/workspace/antennapod-validation/tagged-correction/`. No hosted run was made.
