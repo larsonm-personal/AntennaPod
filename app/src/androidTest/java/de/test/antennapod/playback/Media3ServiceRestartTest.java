@@ -48,9 +48,11 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
@@ -232,6 +234,145 @@ public class Media3ServiceRestartTest {
         } finally {
             EventBus.getDefault().unregister(this);
         }
+    }
+
+    @Test
+    public void sameEpisodeReselectionAllowsAnotherRecoveryAttempt() throws Exception {
+        startAndPause();
+        server.expireA();
+        server.resumeResponses();
+        EventBus.getDefault().register(this);
+        try {
+            onMain(() -> {
+                controller.seekTo(110000);
+                controller.play();
+            });
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> recoveryRejected);
+        } finally {
+            EventBus.getDefault().unregister(this);
+        }
+        String before = generation();
+        server.switchFreshResolutionsToB();
+        onMain(() -> {
+            controller.setMediaItem(controller.getCurrentMediaItem(), 110000);
+            controller.prepare();
+            controller.play();
+        });
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            final boolean[] ready = {false};
+            onMain(() -> ready[0] = controller.getPlayerError() == null
+                    && controller.getPlaybackState() == Player.STATE_READY && controller.isPlaying());
+            return !before.equals(generation()) && ready[0];
+        });
+        onMain(() -> position = controller.getCurrentPosition());
+        Log.i("Media3ServiceRestartTest", "reselectedReadyPosition=" + position
+                + " requests=" + server.getRequests());
+    }
+
+    @Test
+    public void secondLengthChangeInSameSelectionIsReported() throws Exception {
+        startAndPause();
+        server.replaceAWithB();
+        server.resumeResponses();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        awaitRecoveredPosition(113000);
+        String recovered = generation();
+        server.replaceAWith(initial);
+        EventBus.getDefault().register(this);
+        try {
+            onMain(() -> controller.seekTo(75000));
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> recoveryRejected);
+            assertEquals(recovered, generation());
+            onMain(() -> assertNotNull(controller.getPlayerError()));
+        } finally {
+            EventBus.getDefault().unregister(this);
+        }
+    }
+
+    @Test
+    public void pendingRecoveryCannotPrepareAReselectedEpisode() throws Exception {
+        startAndPause();
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        server.resumeResponses();
+        server.holdNextResolution();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasHeldResolution);
+        onMain(() -> {
+            controller.setMediaItem(controller.getCurrentMediaItem(), 20000);
+            controller.pause();
+        });
+        assertIdleAfterResolution();
+    }
+
+    @Test
+    public void pendingRecoveryCannotRestartStoppedPlayback() throws Exception {
+        startAndPause();
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        server.resumeResponses();
+        server.holdNextResolution();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasHeldResolution);
+        onMain(() -> controller.stop());
+        assertIdleAfterResolution();
+    }
+
+    private void assertIdleAfterResolution() throws Exception {
+        CountDownLatch prepared = new CountDownLatch(1);
+        Player.Listener listener = (Player.Listener) Proxy.newProxyInstance(Player.Listener.class.getClassLoader(),
+                new Class<?>[] {Player.Listener.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("equals")) {
+                        return proxy == args[0];
+                    } else if (method.getName().equals("hashCode")) {
+                        return System.identityHashCode(proxy);
+                    } else if (method.getName().equals("toString")) {
+                        return "ReselectionListener";
+                    }
+                    if (method.getName().equals("onPlaybackStateChanged") && (int) args[0] != Player.STATE_IDLE) {
+                        prepared.countDown();
+                    }
+                    return null;
+                });
+        onMain(() -> controller.addListener(listener));
+        try {
+            server.releaseResolution();
+            boolean wasPrepared = prepared.await(2, TimeUnit.SECONDS);
+            Log.i("Media3ServiceRestartTest", "reselectionPrepared=" + wasPrepared
+                    + " requests=" + server.getRequests());
+            assertFalse("Superseded recovery prepared playback", wasPrepared);
+            onMain(() -> assertEquals(Player.STATE_IDLE, controller.getPlaybackState()));
+        } finally {
+            onMain(() -> controller.removeListener(listener));
+        }
+    }
+
+    @Test
+    public void ignoredRangeLengthChangeRecoversThroughFreshServiceSource() throws Exception {
+        startAndPause();
+        String before = generation();
+        long bytes = server.getResponseBodyBytes();
+        server.replaceAWithB();
+        server.ignoreRanges();
+        server.resumeResponses();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        awaitRecoveredPosition(113000);
+        assertNotEquals(before, generation());
+        Log.i("Media3ServiceRestartTest", "ignoredRangeRecoveryBodyBytes="
+                + (server.getResponseBodyBytes() - bytes));
+        assertRecoveredSeeks();
     }
 
     @Subscribe

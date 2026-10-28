@@ -24,3 +24,13 @@ evict. Ordinary restarts reuse the token. The `stream-cache-generations` prefere
 store SHA-256 enclosure identifiers and tokens, not URL history. Only invalidated enclosures create token entries. These are retained until app data is
 cleared, independently of cache eviction; there is no automatic pruning. Same-URL,
 same-length changes remain unsupported; this candidate compares neither ETags nor audio overlap.
+
+Response acceptance is checked before Media3 skips a prefix for a server that ignores
+Range. The existing content-acceptance callback rejects incompatible headers, and the
+wrapper translates that rejection into a source-change error. A matching 200 response
+still requires the normal prefix read; HTTP/TCP may also receive buffered body bytes
+before a rejection. This is not a zero-network-byte guarantee.
+
+Failed token commits restore the previous in-memory value and stop recovery. Selection
+requests and stop commands cancel pending recovery; a completed new selection gets a
+new budget. Internal source replacement preserves the budget already used.

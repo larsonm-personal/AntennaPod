@@ -31,6 +31,10 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile File replacementA;
     private volatile boolean redirectAGets;
     private volatile boolean expiredA;
+    private volatile boolean ignoreRanges;
+    private volatile CountDownLatch nextResolution;
+    private final CountDownLatch resolutionEntered = new CountDownLatch(1);
+    private final CountDownLatch resolutionReleased = new CountDownLatch(1);
     private volatile int connectionGeneration;
     private volatile int interruptedResponses;
     private final AtomicLong responseBodyBytes = new AtomicLong();
@@ -76,6 +80,22 @@ public class ResolvedEpisodeServer extends HTTPBin {
         expiredA = true;
     }
 
+    public void ignoreRanges() {
+        ignoreRanges = true;
+    }
+
+    public void holdNextResolution() {
+        nextResolution = resolutionReleased;
+    }
+
+    public boolean hasHeldResolution() {
+        return resolutionEntered.getCount() == 0;
+    }
+
+    public void releaseResolution() {
+        resolutionReleased.countDown();
+    }
+
     public void redirectGetsFromAToB() {
         redirectAGets = true;
     }
@@ -113,6 +133,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
     @Override
     public void stop() {
         resumeResponses();
+        releaseResolution();
         try {
             if (scenario != null) {
                 scenario.interrupt();
@@ -136,6 +157,27 @@ public class ResolvedEpisodeServer extends HTTPBin {
         String range = session.getHeaders().remove("range");
         synchronized (this) {
             requests.add(session.getMethod() + " " + name + " " + range);
+        }
+        if (name.equals("original") && session.getMethod() == Method.HEAD) {
+            CountDownLatch held;
+            synchronized (this) {
+                held = nextResolution;
+                nextResolution = null;
+            }
+            if (held != null) {
+                resolutionEntered.countDown();
+                try {
+                    if (!held.await(30, TimeUnit.SECONDS)) {
+                        return new Response(Response.Status.INTERNAL_ERROR, "text/plain", "Resolution wait expired");
+                    }
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return new Response(Response.Status.INTERNAL_ERROR, "text/plain", "Resolution interrupted");
+                }
+            }
+        }
+        if (ignoreRanges) {
+            range = null;
         }
         boolean redirectGet = redirectAGets && name.equals("A") && session.getMethod() == Method.GET;
         if (name.equals("original") || redirectGet) {

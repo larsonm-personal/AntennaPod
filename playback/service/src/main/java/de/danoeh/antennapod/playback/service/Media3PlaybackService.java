@@ -96,7 +96,8 @@ public class Media3PlaybackService extends MediaLibraryService {
     private Disposable positionObserverDisposable;
     private Disposable queueLoaderDisposable;
     private Disposable streamRecoveryDisposable;
-    private String streamRecoveryMediaId;
+    private boolean streamRecoveryUsed;
+    private boolean replacingStream;
     private long streamRecoveryAttempt;
     private boolean destroyed;
     private long lastPositionSaveTime = 0;
@@ -150,6 +151,12 @@ public class Media3PlaybackService extends MediaLibraryService {
             @Override
             public void setShuffleModeEnabled(boolean shuffleModeEnabled) {
                 // Ignored, some car stereos set this via Bluetooth
+            }
+
+            @Override
+            public void stop() {
+                invalidateStreamRecovery();
+                super.stop();
             }
 
             @Override
@@ -309,6 +316,17 @@ public class Media3PlaybackService extends MediaLibraryService {
         @Override
         @NonNull
         @UnstableApi
+        public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onSetMediaItems(
+                @NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller,
+                @NonNull List<MediaItem> items, int startIndex, long startPositionMs) {
+            invalidateStreamRecovery();
+            streamRecoveryUsed = true;
+            return super.onSetMediaItems(session, controller, items, startIndex, startPositionMs);
+        }
+
+        @Override
+        @NonNull
+        @UnstableApi
         public ListenableFuture<SessionResult> onCustomCommand(@NonNull MediaSession session,
                 @NonNull MediaSession.ControllerInfo controller,
                 @NonNull SessionCommand customCommand,
@@ -446,13 +464,9 @@ public class Media3PlaybackService extends MediaLibraryService {
 
         @Override
         public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
-            if (mediaItem == null || !mediaItem.mediaId.equals(streamRecoveryMediaId)) {
-                streamRecoveryMediaId = null;
-                streamRecoveryAttempt++;
-                if (streamRecoveryDisposable != null) {
-                    streamRecoveryDisposable.dispose();
-                    streamRecoveryDisposable = null;
-                }
+            if (!replacingStream) {
+                streamRecoveryUsed = false;
+                invalidateStreamRecovery();
             }
             if (mediaItem == null) {
                 if (currentPlayable != null
@@ -474,15 +488,23 @@ public class Media3PlaybackService extends MediaLibraryService {
         }
     };
 
+    private void invalidateStreamRecovery() {
+        streamRecoveryAttempt++;
+        if (streamRecoveryDisposable != null) {
+            streamRecoveryDisposable.dispose();
+            streamRecoveryDisposable = null;
+        }
+    }
+
     private boolean recoverStream(PlaybackException error) {
         ValidatingStreamDataSource.ChangedException change = ValidatingStreamDataSource.ChangedException.find(error);
         MediaItem item = player.getCurrentMediaItem();
         if (change == null || item == null || item.localConfiguration == null || isCasting()
-                || item.mediaId.equals(streamRecoveryMediaId)
+                || streamRecoveryUsed
                 || !item.localConfiguration.uri.toString().equals(change.generation.enclosure)) {
             return false;
         }
-        streamRecoveryMediaId = item.mediaId;
+        streamRecoveryUsed = true;
         long attempt = ++streamRecoveryAttempt;
         String authorization = item.requestMetadata.extras == null ? null
                 : item.requestMetadata.extras.getString(MediaItemAdapter.KEY_AUTHORIZATION_HEADER);
@@ -498,7 +520,8 @@ public class Media3PlaybackService extends MediaLibraryService {
                 return;
             }
             streamRecoveryDisposable = null;
-            if (!item.equals(player.getCurrentMediaItem())) {
+            MediaItem currentItem = player.getCurrentMediaItem();
+            if (currentItem == null) {
                 return;
             }
             if (!recover) {
@@ -506,8 +529,13 @@ public class Media3PlaybackService extends MediaLibraryService {
                 return;
             }
             long position = player.getCurrentPosition();
-            boolean playWhenReady = player.getPlayWhenReady();
-            player.setMediaItem(item, position);
+            final boolean playWhenReady = player.getPlayWhenReady();
+            replacingStream = true;
+            try {
+                player.setMediaItem(currentItem, position);
+            } finally {
+                replacingStream = false;
+            }
             player.prepare();
             player.setPlayWhenReady(playWhenReady);
         }, failure -> {
@@ -515,9 +543,7 @@ public class Media3PlaybackService extends MediaLibraryService {
                 return;
             }
             streamRecoveryDisposable = null;
-            if (!destroyed && item.equals(player.getCurrentMediaItem())) {
-                reportPlaybackError(error);
-            }
+            reportPlaybackError(error);
         });
         return true;
     }
@@ -538,11 +564,7 @@ public class Media3PlaybackService extends MediaLibraryService {
     @Override
     public void onDestroy() {
         destroyed = true;
-        streamRecoveryAttempt++;
-        if (streamRecoveryDisposable != null) {
-            streamRecoveryDisposable.dispose();
-            streamRecoveryDisposable = null;
-        }
+        invalidateStreamRecovery();
         PlaybackService.isRunning = false;
         cancelPositionObserver();
         if (sleepTimer != null) {
