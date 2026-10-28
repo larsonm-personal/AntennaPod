@@ -31,12 +31,12 @@ consumed-PCM observer:
   interval skipped by the mixed-cache failure. Accumulate errors across targets
   so the first wrong content window does not hide later seek results.
 
-The seek helper disables audio and awaits load cancellation before installing a
-fresh output observer. This deliberately separates the expected seek flush from
-unexpected discarded PCM during measurement. The original oracle's flush and
-release checks remain intact. This does not yet cover the ordinary UI seek path
-without track deselection; that needs separate coverage before claiming complete
-seek handling.
+The seek helper calls ordinary `seekTo` on the paused player, then resumes it.
+The installed output provider observes the expected old-output release and new
+output creation without deselecting tracks or replacing the provider. Each seek
+gets a separate consumed-PCM window set and output clock. Unexpected output
+replacement or discarded PCM before or after that transition still fails. This
+exercises production seeking directly, not UI button wiring.
 
 Two small server tests check mutation headers/body and interruption followed by
 a complete fresh request. Existing immutable endpoint/range tests remain. A
@@ -136,3 +136,69 @@ logcat and hashes are retained under
 `/workspace/antennapod-validation/test-expansion/`. JUnit results, rather than the
 runner's shell exit status, determine pass/fail. No hosted or release-build
 qualification has been performed for this increment.
+
+## Seek and priming qualification follow-up
+
+The first seek helper deselected audio to obtain a quiet observer reset. Source
+review showed that this also discards sample queues and cancels loading, whereas
+an ordinary seek can reuse buffered samples. That was a material limitation.
+The revised helper observes the output replacement caused by the ordinary seek,
+without requesting those extra resets. Media3's
+[renderer position reset](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/MediaCodecAudioRenderer.java)
+flushes the sink; its
+[default sink](https://github.com/androidx/media/blob/1.10.0/libraries/exoplayer/src/main/java/androidx/media3/exoplayer/audio/DefaultAudioSink.java)
+releases the old output. The observer waits for that actual replacement rather
+than treating a position callback as proof that old PCM has been discarded.
+
+The first ordinary-seek run passed all six stable A/B targets (80 consumed
+windows, maximum error 0.096570 seconds). The changed-variant case still failed
+at the content assertion: A content at the backward targets, B at the forward
+target, maximum error 60.133511 seconds. Same-URL mutation also reached its
+content assertion. This three-case run had no setup errors.
+
+The earlier priming timeout remains unresolved. Its initial load lasted 8.51
+seconds before the seek reopened the stream; warm runs usually took about two
+seconds. Decoding continued until teardown. However, other cold runs with
+similar startup delays passed, so startup delay alone does not establish the
+cause. One subsequent successful priming snapshot was BUFFERING at 87.163
+seconds of consumed audio, without a player error. Periodic diagnostics now
+record player/buffer position, playing/loading/suppression state, active loads,
+accepted PCM and consumed output time, every five seconds within the unchanged
+30-second bound. No timeout, server staging or content assertion was relaxed.
+
+The state-diagnostic run captured a clock-lag interval during successful priming:
+at 05:22:28.625 UTC the position was 82.576 seconds, buffered position 94.093,
+accepted samples 566255 and consumed time 82.568382. At 05:22:33.697, those were
+83.132, 95.111, 789743 and 83.124670. Both snapshots were READY, playing, loading,
+with suppression zero and no error. Thus 5.067755 seconds of PCM were accepted
+while reported consumption advanced 0.556288 seconds over 5.072 wall seconds.
+This supports a reported output-clock lag in this software-emulator run, not
+network starvation during that interval. It does not establish why the earlier
+run timed out; that run lacked these snapshots. The consumed-audio requirement
+and its deadline remain unchanged.
+
+The follow-up full run completed all 15 cases in 538.941 seconds: 12 passed,
+with only the frozen regression, same-URL mutation and changed-variant seeking
+failing their content assertions. Both stable editions passed all ordinary seek
+targets again. All five server tests and both service tests passed; no setup
+failure occurred. Logs are `qualified-ordinary-seek.*` in the evidence directory.
+
+A final two-case run added clock-read timestamps only: reconnect passed and
+same-URL mutation reached the content failure. At 05:31:12.469 UTC, consumed time
+was 78.074934 seconds and accepted samples 369312. At 05:31:17.486 these were
+78.436949 and 589888: only 0.362015 seconds of reported consumption despite
+5.001723 seconds of accepted PCM. The latter clock read was 71 ms old, ruling
+out a five-second-old observer snapshot for this interval. Playback was READY,
+playing, loading, unsuppressed, buffered through 94.563 seconds, with no error.
+Cold startup also used part of the same 30-second consumption deadline. These
+observations make reported output-clock lag plus startup overhead a concrete
+candidate cause for the earlier timeout, not proof of its historical cause or
+of a specific AudioTrack/Media3 defect. Logs are `clock-freshness.*`. The only
+subsequent source adjustment prints -1 for a clock that has never been read;
+that diagnostic formatting change was rebuilt and style-checked.
+
+Qualification remains local API 30 software emulation. The isolated historical
+setup timeout remains recorded; these passing setups do not erase it. No
+production code, server staging, timeout or content tolerance was changed in
+this follow-up. The frozen test methods, restart/content assertion helpers and cancellation
+barrier remain identical.

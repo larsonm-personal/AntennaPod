@@ -80,6 +80,8 @@ public class ResolvedUrlPlaybackTest {
     private ExoPlayer player;
     private volatile PcmOutput sink;
     private volatile boolean outputRecreated;
+    private volatile PcmOutput outputBeforeSeek;
+    private long seekStartMs;
     private File initial;
     private File changed;
     private volatile long playerPosition;
@@ -273,16 +275,39 @@ public class ResolvedUrlPlaybackTest {
     }
 
     private void awaitPrimedAudio() {
+        long[] nextReportMs = {0};
         try {
             Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
-            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
-                    () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).conditionEvaluationListener(condition -> {
+                if (condition.getElapsedTimeInMS() >= nextReportMs[0]) {
+                    nextReportMs[0] += 5000;
+                    logPrimingState();
+                }
+            }).until(() -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
         } finally {
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> Log.i(TAG,
-                    "priming prefix=" + server.hasSentPrefix() + " state=" + player.getPlaybackState()
-                            + " position=" + player.getCurrentPosition() + " consumedUs="
-                            + (sink == null ? -1 : sink.consumedUs) + " error=" + player.getPlayerError()));
+            logPrimingState();
         }
+    }
+
+    private void logPrimingState() {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            PcmOutput output = sink;
+            long accepted = 0;
+            if (output != null) {
+                synchronized (output) {
+                    accepted = output.acceptedSamples;
+                }
+            }
+            Log.i(TAG, "priming prefix=" + server.hasSentPrefix() + " state=" + player.getPlaybackState()
+                    + " position=" + player.getCurrentPosition() + " buffered=" + player.getBufferedPosition()
+                    + " playing=" + player.isPlaying() + " loading=" + player.isLoading()
+                    + " suppression=" + player.getPlaybackSuppressionReason() + " active=" + activeLoads
+                    + " acceptedSamples=" + accepted + " consumedUs="
+                    + (output == null ? -1 : output.consumedUs) + " clockReadAgeMs="
+                    + (output == null || output.positionReadNanos == 0 ? -1
+                    : (System.nanoTime() - output.positionReadNanos) / 1000000)
+                    + " error=" + player.getPlayerError());
+        });
     }
 
     private MediaItem primeCachedEpisode() throws Exception {
@@ -323,15 +348,17 @@ public class ResolvedUrlPlaybackTest {
     }
 
     private double seekAndMeasureContent(long position, double selectedAdSeconds) throws Exception {
-        cancelLoadingAndWait();
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.seekTo(position));
-        observeAudioAt(position);
+        assertFalse("Unexpected output recreation before seek", outputRecreated);
+        assertFalse("PCM discarded before seek", sink.discardedAfterPcm);
+        final PcmOutput previousOutput = sink;
+        seekStartMs = position;
+        outputBeforeSeek = previousOutput;
         observationEndMs = position + 3500;
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).build());
+            player.seekTo(position);
             player.play();
         });
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> sink != previousOutput);
         awaitResolvedContent();
         assertFalse("Audio output recreated after seek", outputRecreated);
         assertFalse("PCM discarded after seek", sink.discardedAfterPcm);
@@ -375,8 +402,15 @@ public class ResolvedUrlPlaybackTest {
                     assertEquals(C.ENCODING_PCM_16BIT, config.encoding);
                     assertEquals(AudioFormat.CHANNEL_OUT_MONO, config.channelMask);
                     assertFalse(config.isOffload);
-                    outputRecreated |= sink != null && sink.acceptedSamples != 0;
-                    sink = new PcmOutput(super.getAudioOutput(config), position);
+                    long startMs = position;
+                    if (outputBeforeSeek != null && outputBeforeSeek == sink) {
+                        assertTrue("Old output not released on seek", sink.discardedAfterPcm);
+                        startMs = seekStartMs;
+                        outputBeforeSeek = null;
+                    } else {
+                        outputRecreated |= sink != null && sink.acceptedSamples != 0;
+                    }
+                    sink = new PcmOutput(super.getAudioOutput(config), startMs);
                     return sink;
                 }
             };
@@ -583,6 +617,7 @@ public class ResolvedUrlPlaybackTest {
         private int crossings;
         private int samples;
         private volatile long consumedUs;
+        private volatile long positionReadNanos;
         private volatile boolean discardedAfterPcm;
 
         PcmOutput(AudioOutput delegate, long startMs) {
@@ -623,6 +658,7 @@ public class ResolvedUrlPlaybackTest {
         public long getPositionUs() {
             long position = super.getPositionUs();
             consumedUs = position < 0 ? 0 : position + (long) (startSeconds * 1000000);
+            positionReadNanos = System.nanoTime();
             return position;
         }
 
