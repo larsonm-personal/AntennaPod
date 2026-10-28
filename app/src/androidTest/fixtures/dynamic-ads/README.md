@@ -118,7 +118,12 @@ is beyond it. A maps these targets to program 17.944, 47.944, and 12.944 seconds
 B maps them to 78, 108, and 73 seconds. The next seek never depends on an edition
 inferred from potentially corrupted audio. Stable controls evaluate both mappings.
 The case checks these intervals, not every possible passage or exact resume time.
-Same-length and HEAD/GET integrity passes alone do not establish subsequent seekability.
+Same-length and HEAD/GET initial sampled-content passes alone do not establish
+subsequent seekability. A separate same-length mutation case now applies the
+same fixed seek/replay plan, requiring successful played samples rather than
+accepting an error. It checks equal encoded lengths and distinct fixture bytes
+before priming; decoded fixture measurements establish the intended different
+program coordinates at all targets. HEAD/GET seek recovery remains uncovered.
 
 Tagging changes the program bytes throughout; it is not evidence of the captured
 server's layout or a sufficient challenge to overlap-based fixes. The original

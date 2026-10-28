@@ -35,6 +35,7 @@ import de.danoeh.antennapod.playback.service.internal.ExoPlayerUtils;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.FileUtils;
 import org.awaitility.Awaitility;
 import org.junit.After;
 import org.junit.Before;
@@ -313,6 +314,23 @@ public class ResolvedUrlPlaybackTest {
         taggedAudio = new ResolvedTaggedAudio();
         playResolved(media, RESUME_MS);
         checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), true));
+    }
+
+    @Test
+    public void sameLengthMutationKeepsSampledSeekTargetsRecoverable() throws Exception {
+        useTaggedFixtures(true);
+        assertEquals("Encoded lengths differ", initial.length(), changed.length());
+        assertFalse("Fixtures are identical", FileUtils.contentEquals(initial, changed));
+        MediaItem media = primeCachedEpisode();
+        server.replaceAWithB();
+        try {
+            taggedAudio = new ResolvedTaggedAudio();
+            playResolved(media, RESUME_MS);
+            checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+            checkFixedSeekTargets();
+        } finally {
+            Log.i(TAG, "same-length seeking requests=" + server.getRequests());
+        }
     }
 
     @Test

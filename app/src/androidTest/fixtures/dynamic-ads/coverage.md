@@ -417,3 +417,39 @@ result documentation was finalized after those runs. The subsequent diagnostic
 change was rebuilt and rerun in debug/release. Its evidence is retained under
 `/workspace/antennapod-validation/eviction-review/`. Eviction setup/assertions were
 unchanged and were not redundantly rerun.
+
+## Same-length mutation followed by seeking
+
+`sameLengthMutationKeepsSampledSeekTargetsRecoverable` adds the existing fixed
+seek/replay plan to same-URL, same-length mutation. Its 15-line method checks
+equal encoded lengths and different fixture bytes, requires played samples, and
+logs requests even on failure. No existing Java method or oracle changed. Both
+files are 4,370,390 bytes and decode to 8,030,592 samples. Offline decoded checks
+at all three selected intervals confirm the intended different sweep bands and
+program coordinates; for media 81–82 seconds, A measures about 743 Hz and the
+equal-length alternate about 4,493.5 Hz. These are synthetic tagged fixtures,
+not a claim of universal same-length change detection.
+
+| Final-source run | Passed / total | Seconds |
+| --- | --- | --- |
+| Debug focused | 2 / 3 | 182.784 |
+| Release focused | 2 / 3 | 116.768 |
+| Debug complete acceptance | 34 / 39 | 1313.879 |
+| Release complete acceptance | 34 / 39 | 1114.908 |
+
+The new case failed at repeated sampled editions in all four runs. Both focused
+stable controls passed. Both complete runs had exactly five content failures:
+unavailable-A restart, same-URL length change, frozen fresh-resolution mixing,
+same-length sampled seeking, and the existing changed-edition sampled seeking.
+All remaining cases passed, including both real-eviction cases and both service
+controls. There were no setup timeouts, skips or linkage failures. The research
+runner was explicitly absent from the acceptance selection. The sampled oracle's
+blind spots and the documented expiry limitation remain unchanged.
+
+Debug/release assembly and focused Checkstyle passed. Installed APK hashes matched
+canonical builds; no retention rule changed. Complete selection used the four
+classes ResolvedTaggedAudioTest, ResolvedUrlPlaybackTest, ResolvedEpisodeServerTest
+and Media3ServiceRestartTest through AndroidJUnitRunner, with a 30-minute outer
+shell bound and unchanged individual deadlines. Terminal results, raw logcat,
+fixture measurements and APK hashes are retained in
+`/workspace/antennapod-validation/same-length-seeking/`. No hosted run was made.
