@@ -668,3 +668,9 @@ checks passed. Only mixed-content playback failed, at the consumed-audio asserti
 [Diagnostic transcripts and complete runner results](evidence/cacheShutdown20261028.txt)
 retain the baseline and barrier measurements, with hashes of the full local logs.
 The minimal review branch excludes these file observers and the precompute experiment.
+
+The stripped-down review change, `3f2701a79036792ff16304d86c7e9a7ccea304d7`,
+passed debug/release builds and focused Checkstyle. Its separate nine-case release
+run also passed all eight controls and failed only the unchanged content assertion
+(A-before=33, B-after=9, maxErrorA=60.0566985 seconds). Hosted qualification is
+[run 40607883448](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448).

@@ -3454,3 +3454,410 @@ Tests run: 9,  Failures: 1
 
 
 INSTRUMENTATION_CODE: -1
+
+=== minimal-barrier-controls (review 3f2701a79036792ff16304d86c7e9a7ccea304d7) ===
+logcat SHA-256: 44b8edb88515f065c45f8754f73222e51fdf14721f32d00de96795918add55f9
+10-28 00:13:50.095 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=0 active=[0]
+10-28 00:13:52.595 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=0 active=[]
+10-28 00:13:52.603 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=1 active=[1]
+10-28 00:14:15.313 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=1 active=[]
+10-28 00:14:15.419 10966 10987 I ResolvedUrlPlaybackTest: mediaLoadsFinishedBeforeRelease=true
+10-28 00:14:18.260 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=0 length=5015
+10-28 00:14:18.282 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=1679558 length=621934
+10-28 00:14:21.030 10966 10987 I ResolvedUrlPlaybackTest: cachedEndBytes=2301492 cacheEndSeconds=95.89551020408163
+10-28 00:14:21.213 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=2 active=[2]
+10-28 00:14:23.107 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=2 active=[]
+10-28 00:14:23.109 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=3 active=[3]
+10-28 00:14:31.378 10966 10966 I ResolvedUrlPlaybackTest: onLoadCompleted task=3 active=[]
+10-28 00:14:40.345 10966 10987 I ResolvedUrlPlaybackTest: restart requests=[HEAD original null, HEAD A null, GET A null, GET A bytes=1679558-4370389, HEAD original null, HEAD A null, GET A bytes=5015-1679557, GET A bytes=2301492-4370389]
+10-28 00:14:40.363 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=87.13287845432694 program=25.08124354364076 errorA=0.0038752933954526725 errorB=-60.05163491068618
+10-28 00:14:40.363 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=87.37506030604581 program=25.32036451299404 errorA=8.144110298644591E-4 errorB=-60.05469579305177
+10-28 00:14:40.364 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=87.62503538956531 program=25.570347720592338 errorA=8.225351086608157E-4 errorB=-60.054687668972974
+10-28 00:14:40.364 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=87.87515144071622 program=25.82045933428665 errorA=8.180976520613115E-4 errorB=-60.05469210642957
+10-28 00:14:40.365 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=88.12517482901802 program=26.070481721531195 errorA=8.170965948082198E-4 errorB=-60.05469310748683
+10-28 00:14:40.365 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=88.37510815271952 program=26.320414790263467 errorA=8.168416255820432E-4 errorB=-60.05469336245605
+10-28 00:14:40.370 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=88.62495392969629 program=26.570268476973744 errorA=8.247513590902145E-4 errorB=-60.054685452722545
+10-28 00:14:40.371 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=88.87493578503529 program=26.820245570040324 errorA=8.199890866684711E-4 errorB=-60.05469021499496
+10-28 00:14:40.371 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=89.1250520239314 program=27.070356788563096 errorA=8.149687133283123E-4 errorB=-60.05469523536831
+10-28 00:14:40.372 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=89.37507974623833 program=27.320386381756734 errorA=8.168396000414191E-4 errorB=-60.054693364481594
+10-28 00:14:40.372 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=89.6250214348965 program=27.570319533698186 errorA=8.083028833247852E-4 errorB=-60.054701901198314
+10-28 00:14:40.373 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=89.87487937427836 program=27.820185777143585 errorA=8.166069468558135E-4 errorB=-60.05469359713478
+10-28 00:14:40.379 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=90.12486712607921 program=28.0701690900096 errorA=8.121680120254382E-4 errorB=-60.05469803606961
+10-28 00:14:40.392 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=90.37498319081621 program=28.32028922453541 errorA=8.162378008371718E-4 errorB=-60.054693966280794
+10-28 00:14:40.393 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=90.62501473179917 program=28.57031846696425 errorA=8.13939246715023E-4 errorB=-60.05469626483492
+10-28 00:14:40.403 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=90.87496376431608 program=28.82026281301835 errorA=8.092527839060892E-4 errorB=-60.05470095129773
+10-28 00:14:40.404 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=91.12503670478007 program=29.070350305138486 errorA=8.238044400492583E-4 errorB=-60.05468639964158
+10-28 00:14:40.404 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=91.3750296338795 program=29.32033503622861 errorA=8.156064307378585E-4 errorB=-60.054694597650894
+10-28 00:14:40.404 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=91.62494122217532 program=29.570239616958453 errorA=8.085988647650311E-4 errorB=-60.05470160521687
+10-28 00:14:40.405 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=91.87497588092364 program=29.820276778748553 errorA=8.111019065459857E-4 errorB=-60.05469910217509
+10-28 00:14:40.405 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=92.12493150344446 program=30.070233143808252 errorA=8.118444454296991E-4 errorB=-60.054698359636205
+10-28 00:14:40.411 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=92.3750058250957 program=30.320310249899165 errorA=8.146288851023087E-4 errorB=-60.05469557519653
+10-28 00:14:40.412 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=92.62500340641955 program=30.570302892931146 errorA=8.096905932291065E-4 errorB=-60.054700513488406
+10-28 00:14:40.412 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=92.87492273780305 program=30.820236705788368 errorA=8.241720669559527E-4 errorB=-60.05468603201468
+10-28 00:14:40.413 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=93.12496015254001 program=31.07026600904017 errorA=8.160605817941757E-4 errorB=-60.054694143499844
+10-28 00:14:40.413 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=93.37492163220719 program=31.320223572190077 errorA=8.121440645219025E-4 errorB=-60.05469806001712
+10-28 00:14:40.421 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=93.62499715289664 program=31.5703105234643 errorA=8.235746492957219E-4 errorB=-60.05468662943234
+10-28 00:14:40.421 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=93.87499868619881 program=31.820317442773142 errorA=8.289606559692686E-4 errorB=-60.05468124342566
+10-28 00:14:40.423 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=94.12492516858003 program=32.07023107760911 errorA=8.161131107087272E-4 errorB=-60.054694090970926
+10-28 00:14:40.427 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=94.37496495118071 program=32.32026572915503 errorA=8.10982055952536E-4 errorB=-60.05469922202568
+10-28 00:14:40.428 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=94.62493163147832 program=32.57022946004575 errorA=8.080326490684797E-4 errorB=-60.05470217143257
+10-28 00:14:40.428 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=94.8750080304557 program=32.82030732368264 errorA=8.094973085732704E-4 errorB=-60.05470070677306
+10-28 00:14:40.428 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=95.1250131567697 program=33.07032999692812 errorA=8.270442400615252E-4 errorB=-60.054683159841574
+10-28 00:14:40.431 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=95.37494593990023 program=33.32024123365719 errorA=8.054978385985123E-4 errorB=-60.05470470624304
+10-28 00:14:40.431 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=95.62498786000396 program=33.570309840162004 errorA=8.321842396838974E-4 errorB=-60.05467801984195
+10-28 00:14:40.432 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=95.87495930201831 program=33.8202683103316 errorA=8.192123949228858E-4 errorB=-60.05469099168671
+10-28 00:14:40.432 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=96.12503630171757 program=34.07034860831608 errorA=8.225106801447168E-4 errorB=-60.05468769340149
+10-28 00:14:40.432 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=96.37504467037996 program=34.32036227995514 errorA=8.278136568122818E-4 errorB=-60.05468239042482
+10-28 00:14:40.432 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=96.62498334692165 program=34.570292066322764 errorA=8.18923482746925E-4 errorB=-60.05469128059889
+10-28 00:14:40.433 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=96.87502696983807 program=34.8203400818485 errorA=8.233160920596561E-4 errorB=-60.054686887989575
+10-28 00:14:40.433 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=97.12500269997079 program=35.070294560276075 errorA=8.020643869173227E-4 errorB=-60.05470813969472
+10-28 00:14:40.438 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=97.37491181834281 program=35.32023275182069 errorA=8.311375595155823E-4 errorB=-60.05467906652212
+10-28 00:14:40.443 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=97.62492301198665 program=35.57021598998314 errorA=8.031820781226884E-4 errorB=-60.05470702200351
+10-28 00:14:40.444 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=97.87503542890038 program=35.820355847098156 errorA=8.306222794161044E-4 errorB=-60.05467958180222
+10-28 00:14:40.444 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=98.12508069130601 program=36.07038285826605 errorA=8.123710416754193E-4 errorB=-60.05469783303996
+10-28 00:14:40.445 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=98.3750603427685 program=36.3203639162181 errorA=8.137775312277995E-4 errorB=-60.05469642655041
+10-28 00:14:40.445 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=98.62497549798688 program=36.570262007719975 errorA=7.96713814729344E-4 errorB=-60.054713490266906
+10-28 00:14:40.446 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=98.87498928763716 program=36.82030188079069 errorA=8.227972351591006E-4 errorB=-60.054687406846476
+10-28 00:14:40.447 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=99.12494016663364 program=37.07024115344267 errorA=8.111908906727194E-4 errorB=-60.05469901319096
+10-28 00:14:40.447 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=99.37482737170612 program=37.32015009638992 errorA=8.329287654404993E-4 errorB=-60.054677275316195
+10-28 00:14:40.447 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=99.6249710320074 program=37.57027618107227 errorA=8.153531465140418E-4 errorB=-60.05469485093512
+10-28 00:14:40.448 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=99.87505138296939 program=37.82035891072184 errorA=8.17731834089841E-4 errorB=-60.054692472247545
+10-28 00:14:40.448 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=100.12491115959683 program=38.07019916033844 errorA=7.982048232406669E-4 errorB=-60.054711999258394
+10-28 00:14:40.448 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=100.37486646726899 program=38.32018345006043 errorA=8.271868730815868E-4 errorB=-60.05468301720855
+10-28 00:14:40.449 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=100.6249162630632 program=38.570220346042035 errorA=8.142870604714858E-4 errorB=-60.054695917021164
+10-28 00:14:40.454 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=100.87490470089827 program=38.82020192371433 errorA=8.074268976940857E-4 errorB=-60.05470277718394
+10-28 00:14:40.455 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=101.12498508249439 program=39.07027789157745 errorA=8.030131646918903E-4 errorB=-60.05470719091694
+10-28 00:14:40.455 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=101.37500525524439 program=39.32031549739153 errorA=8.204462287793035E-4 errorB=-60.054689757852856
+10-28 00:14:40.460 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=false emptyCache=false media=101.62496451359297 program=39.570285677393734 errorA=8.313678823981263E-4 errorB=-60.05467883619924
+10-28 00:14:40.460 10966 10987 I ResolvedUrlPlaybackTest: boundary=95.89551020408163 A-before=34 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.054713490266906
+10-28 00:14:42.228 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=4 active=[4]
+10-28 00:14:43.055 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=4 active=[]
+10-28 00:14:43.082 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=5 active=[5]
+10-28 00:15:05.864 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=5 active=[]
+10-28 00:15:05.901 10966 10987 I ResolvedUrlPlaybackTest: mediaLoadsFinishedBeforeRelease=true
+10-28 00:15:08.763 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=0 length=1884
+10-28 00:15:08.785 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=1679558 length=621934
+10-28 00:15:11.649 10966 10987 I ResolvedUrlPlaybackTest: cachedEndBytes=2301492 cacheEndSeconds=95.89551020408163
+10-28 00:15:14.104 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=6 active=[6]
+10-28 00:15:14.651 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=6 active=[]
+10-28 00:15:14.673 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=7 active=[7]
+10-28 00:15:19.615 10966 10966 I ResolvedUrlPlaybackTest: onLoadCompleted task=7 active=[]
+10-28 00:15:28.484 10966 10987 I ResolvedUrlPlaybackTest: restart requests=[HEAD original null, HEAD A null, GET A null, GET A bytes=1679558-4370389, HEAD original null, HEAD B null, GET B null, GET B bytes=2087710-2929057]
+10-28 00:15:28.485 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=87.13297382529683 program=85.01609602918386 errorA=59.93863240796866 errorB=-0.11687779611297344
+10-28 00:15:28.489 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=87.3750237790966 program=85.37593712475503 errorA=60.05642354974007 errorB=9.13345658432263E-4
+10-28 00:15:28.490 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=87.62499480165772 program=85.62581002238437 errorA=60.056325424808286 errorB=8.152207266505229E-4
+10-28 00:15:28.491 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=87.87500844219991 program=85.87587424312723 errorA=60.05637600500895 errorB=8.658009273148082E-4
+10-28 00:15:28.497 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=88.12499480833586 program=86.12583668839666 errorA=60.05635208414244 errorB=8.41880060804101E-4
+10-28 00:15:28.501 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=88.37495345879617 program=86.37551394351135 errorA=60.056070688796815 errorB=5.604847151801096E-4
+10-28 00:15:28.501 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=88.62495414365674 program=86.62597573673055 errorA=60.05653179715545 errorB=0.001021593073815552
+10-28 00:15:28.502 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=88.87499610078305 program=86.87574744916272 errorA=60.0562615524613 errorB=7.513483796657283E-4
+10-28 00:15:28.502 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=89.12501139052192 program=87.12590235153112 errorA=60.05640116509084 errorB=8.90961009204716E-4
+10-28 00:15:28.503 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=89.37499882585155 program=87.37599905513912 errorA=60.056510433369205 errorB=0.0010002292875697094
+10-28 00:15:28.503 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=89.62502778879366 program=87.62578129664465 errorA=60.05626371193262 errorB=7.535078509874893E-4
+10-28 00:15:28.503 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=89.8750299014306 program=87.8757141540876 errorA=60.056194456738645 errorB=6.842526570096652E-4
+10-28 00:15:28.504 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=90.12500508183354 program=88.1258074428038 errorA=60.056312565051904 errorB=8.023609702689782E-4
+10-28 00:15:28.505 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=90.37495319971993 program=88.37587245605363 errorA=60.05642946041534 errorB=9.192563337023785E-4
+10-28 00:15:28.506 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=90.62494245386131 program=88.62572766437432 errorA=60.05629541459465 errorB=7.852105130154996E-4
+10-28 00:15:28.506 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=90.87497290414825 program=88.87571221033393 errorA=60.056249510267314 errorB=7.393061856788563E-4
+10-28 00:15:28.506 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=91.12497597747534 program=89.12608087271889 errorA=60.05661509932518 errorB=0.0011048952435430692
+10-28 00:15:28.507 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=91.37495287908104 program=89.37549402368872 errorA=60.056051348689316 errorB=5.411446076806214E-4
+10-28 00:15:28.507 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=91.62497045921455 program=89.62574529454378 errorA=60.05628503941086 errorB=7.748353292242882E-4
+10-28 00:15:28.508 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=91.87496146368696 program=89.87584443570435 errorA=60.05639317609903 errorB=8.829720173935129E-4
+10-28 00:15:28.508 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=92.12492606005664 program=90.12573515803618 errorA=60.056319302061176 errorB=8.090979795412068E-4
+10-28 00:15:28.508 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=92.37493038667752 program=90.37597399702926 errorA=60.05655381443338 errorB=0.0010436103517434958
+10-28 00:15:28.509 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=92.62497528844494 program=90.62551542039547 errorA=60.056050336032165 errorB=5.401319505295987E-4
+10-28 00:15:28.509 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=92.87499376609952 program=90.87574942749758 errorA=60.056265865479695 errorB=7.556613980597149E-4
+10-28 00:15:28.510 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=93.1249862562288 program=91.12592702188508 errorA=60.05645096973792 errorB=9.407656562814282E-4
+10-28 00:15:28.510 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=93.3750184304289 program=91.37585461219874 errorA=60.05634638585148 errorB=8.361817698414598E-4
+10-28 00:15:28.510 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=93.62502417993412 program=91.62594172395575 errorA=60.05642774810327 errorB=9.17544021632466E-4
+10-28 00:15:28.511 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=93.8750037130005 program=91.87571560185582 errorA=60.056222092936956 errorB=7.11888855320808E-4
+10-28 00:15:28.511 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=94.12495863356357 program=92.12589068986637 errorA=60.056442260384436 errorB=9.32056302801243E-4
+10-28 00:15:28.511 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=94.3749520879484 program=92.3755311851265 errorA=60.05608930125974 errorB=5.790971781038934E-4
+10-28 00:15:28.512 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=94.62498486488357 program=92.62573191658618 errorA=60.05625725578424 errorB=7.47051702603585E-4
+10-28 00:15:28.512 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=94.87499215316492 program=92.87584604078003 errorA=60.05636409169674 errorB=8.538876151078512E-4
+10-28 00:15:28.512 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=95.12497455723768 program=93.12575801670444 errorA=60.056293663548395 errorB=7.834594667599504E-4
+10-28 00:15:28.513 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=95.37499482887165 program=93.37586396489397 errorA=60.05637934010395 errorB=8.691360223167521E-4
+10-28 00:15:28.513 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=95.62499020636542 program=93.62608374562686 errorA=60.05660374334307 errorB=0.001093539261432852
+10-28 00:15:28.514 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=95.87495963846989 program=93.87585738985676 errorA=60.05640795546851 errorB=8.977513868728693E-4
+10-28 00:15:28.515 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=96.12496829089369 program=94.12593606471384 errorA=60.056477977901785 errorB=9.677738201503416E-4
+10-28 00:15:28.515 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=96.37495216936983 program=94.37585254164932 errorA=60.056410576361124 errorB=9.003722794886926E-4
+10-28 00:15:28.516 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=96.62497349138812 program=94.62596620472374 errorA=60.056502917417255 errorB=9.927133356200102E-4
+10-28 00:15:28.516 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=96.87497076384744 program=94.87579268317789 errorA=60.05633212341208 errorB=8.219193304483952E-4
+10-28 00:15:28.516 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=97.12494189216638 program=95.12540571806204 errorA=60.0559740299773 errorB=4.6382589566462684E-4
+10-28 00:15:28.516 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=97.3749515903751 program=95.37553108871516 errorA=60.056089702421694 errorB=5.794983400591036E-4
+10-28 00:15:28.517 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=97.62493631835602 program=95.62586757222573 errorA=60.056441457951344 errorB=9.312538697088257E-4
+10-28 00:15:28.517 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=97.87495969039023 program=95.87579807285624 errorA=60.05634858654765 errorB=8.383824660143091E-4
+10-28 00:15:28.520 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=98.12495718849833 program=96.1258646003535 errorA=60.0564176159368 errorB=9.074118551666288E-4
+10-28 00:15:28.520 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=98.37493079778133 program=96.37611906721584 errorA=60.05669847351614 errorB=0.0011882694345075606
+10-28 00:15:28.521 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=true media=98.6249418574611 program=96.62610605143043 errorA=60.056674398050966 errorB=0.0011641939693305403
+10-28 00:15:28.521 10966 10987 I ResolvedUrlPlaybackTest: boundary=95.89551020408163 A-before=0 B-after=9 maxErrorA=60.05669847351614 maxErrorB=0.11687779611297344
+10-28 00:15:30.530 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=8 active=[8]
+10-28 00:15:31.233 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=8 active=[]
+10-28 00:15:31.241 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=9 active=[9]
+10-28 00:15:53.486 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=9 active=[]
+10-28 00:15:53.568 10966 10987 I ResolvedUrlPlaybackTest: mediaLoadsFinishedBeforeRelease=true
+10-28 00:15:56.347 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=0 length=1884
+10-28 00:15:56.373 10966 10987 I ResolvedUrlPlaybackTest: cachedSpanStart=1679558 length=618799
+10-28 00:15:59.079 10966 10987 I ResolvedUrlPlaybackTest: cachedEndBytes=2298357 cacheEndSeconds=95.76489795918367
+10-28 00:15:59.247 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=10 active=[10]
+10-28 00:16:00.304 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=10 active=[]
+10-28 00:16:00.305 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=11 active=[11]
+10-28 00:16:04.084 10966 10966 I ResolvedUrlPlaybackTest: onLoadCompleted task=11 active=[]
+10-28 00:16:13.535 10966 10987 I ResolvedUrlPlaybackTest: restart requests=[HEAD original null, HEAD A null, GET A null, GET A bytes=1679558-4370389, HEAD original null, HEAD B null, GET B bytes=1884-1679557, GET B bytes=2298357-4370389]
+10-28 00:16:13.536 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=87.13287845432694 program=25.08124354364076 errorA=0.0038752933954526725 errorB=-60.05163491068618
+10-28 00:16:13.536 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=87.37506030604581 program=25.32036451299404 errorA=8.144110298644591E-4 errorB=-60.05469579305177
+10-28 00:16:13.537 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=87.62503538956531 program=25.570347720592338 errorA=8.225351086608157E-4 errorB=-60.054687668972974
+10-28 00:16:13.537 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=87.87515144071622 program=25.82045933428665 errorA=8.180976520613115E-4 errorB=-60.05469210642957
+10-28 00:16:13.539 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=88.12517482901802 program=26.070481721531195 errorA=8.170965948082198E-4 errorB=-60.05469310748683
+10-28 00:16:13.539 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=88.37510815271952 program=26.320414790263467 errorA=8.168416255820432E-4 errorB=-60.05469336245605
+10-28 00:16:13.540 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=88.62495392969629 program=26.570268476973744 errorA=8.247513590902145E-4 errorB=-60.054685452722545
+10-28 00:16:13.540 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=88.87493578503529 program=26.820245570040324 errorA=8.199890866684711E-4 errorB=-60.05469021499496
+10-28 00:16:13.541 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=89.1250520239314 program=27.070356788563096 errorA=8.149687133283123E-4 errorB=-60.05469523536831
+10-28 00:16:13.541 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=89.37507974623833 program=27.320386381756734 errorA=8.168396000414191E-4 errorB=-60.054693364481594
+10-28 00:16:13.544 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=89.6250214348965 program=27.570319533698186 errorA=8.083028833247852E-4 errorB=-60.054701901198314
+10-28 00:16:13.560 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=89.87487937427836 program=27.820185777143585 errorA=8.166069468558135E-4 errorB=-60.05469359713478
+10-28 00:16:13.560 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=90.12486712607921 program=28.0701690900096 errorA=8.121680120254382E-4 errorB=-60.05469803606961
+10-28 00:16:13.561 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=90.37498319081621 program=28.32028922453541 errorA=8.162378008371718E-4 errorB=-60.054693966280794
+10-28 00:16:13.561 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=90.62501473179917 program=28.57031846696425 errorA=8.13939246715023E-4 errorB=-60.05469626483492
+10-28 00:16:13.581 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=90.87496376431608 program=28.82026281301835 errorA=8.092527839060892E-4 errorB=-60.05470095129773
+10-28 00:16:13.588 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=91.12503670478007 program=29.070350305138486 errorA=8.238044400492583E-4 errorB=-60.05468639964158
+10-28 00:16:13.589 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=91.3750296338795 program=29.32033503622861 errorA=8.156064307378585E-4 errorB=-60.054694597650894
+10-28 00:16:13.589 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=91.62494122217532 program=29.570239616958453 errorA=8.085988647650311E-4 errorB=-60.05470160521687
+10-28 00:16:13.595 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=91.87497588092364 program=29.820276778748553 errorA=8.111019065459857E-4 errorB=-60.05469910217509
+10-28 00:16:13.596 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=92.12493150344446 program=30.070233143808252 errorA=8.118444454296991E-4 errorB=-60.054698359636205
+10-28 00:16:13.596 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=92.3750058250957 program=30.320310249899165 errorA=8.146288851023087E-4 errorB=-60.05469557519653
+10-28 00:16:13.596 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=92.62500340641955 program=30.570302892931146 errorA=8.096905932291065E-4 errorB=-60.054700513488406
+10-28 00:16:13.597 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=92.87492273780305 program=30.820236705788368 errorA=8.241720669559527E-4 errorB=-60.05468603201468
+10-28 00:16:13.597 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=93.12496015254001 program=31.07026600904017 errorA=8.160605817941757E-4 errorB=-60.054694143499844
+10-28 00:16:13.602 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=93.37492163220719 program=31.320223572190077 errorA=8.121440645219025E-4 errorB=-60.05469806001712
+10-28 00:16:13.619 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=93.62499715289664 program=31.5703105234643 errorA=8.235746492957219E-4 errorB=-60.05468662943234
+10-28 00:16:13.620 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=93.87499868619881 program=31.820317442773142 errorA=8.289606559692686E-4 errorB=-60.05468124342566
+10-28 00:16:13.620 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=94.12492516858003 program=32.07023107760911 errorA=8.161131107087272E-4 errorB=-60.054694090970926
+10-28 00:16:13.622 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=94.37496495118071 program=32.32026572915503 errorA=8.10982055952536E-4 errorB=-60.05469922202568
+10-28 00:16:13.622 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=94.62493163147832 program=32.57022946004575 errorA=8.080326490684797E-4 errorB=-60.05470217143257
+10-28 00:16:13.623 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=94.8750080304557 program=32.82030732368264 errorA=8.094973085732704E-4 errorB=-60.05470070677306
+10-28 00:16:13.639 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=95.1250131567697 program=33.07032999692812 errorA=8.270442400615252E-4 errorB=-60.054683159841574
+10-28 00:16:13.639 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=95.37494593990023 program=33.32024123365719 errorA=8.054978385985123E-4 errorB=-60.05470470624304
+10-28 00:16:13.640 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=95.62498239782144 program=33.5717894187857 errorA=0.0023172250458927124 errorB=-60.05319297903574
+10-28 00:16:13.640 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=95.87503096299615 program=92.14827730014768 errorA=58.32875654123317 errorB=-1.7267536628484663
+10-28 00:16:13.640 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=96.12496829089369 program=94.12593606471384 errorA=60.056477977901785 errorB=9.677738201503416E-4
+10-28 00:16:13.641 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=96.37495216936983 program=94.37585254164932 errorA=60.056410576361124 errorB=9.003722794886926E-4
+10-28 00:16:13.641 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=96.62497349138812 program=94.62596620472374 errorA=60.056502917417255 errorB=9.927133356200102E-4
+10-28 00:16:13.644 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=96.87497076384744 program=94.87579268317789 errorA=60.05633212341208 errorB=8.219193304483952E-4
+10-28 00:16:13.645 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=97.12494189216638 program=95.12540571806204 errorA=60.0559740299773 errorB=4.6382589566462684E-4
+10-28 00:16:13.645 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=97.3749515903751 program=95.37553108871516 errorA=60.056089702421694 errorB=5.794983400591036E-4
+10-28 00:16:13.645 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=97.62493631835602 program=95.62586757222573 errorA=60.056441457951344 errorB=9.312538697088257E-4
+10-28 00:16:13.651 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=97.87495969039023 program=95.87579807285624 errorA=60.05634858654765 errorB=8.383824660143091E-4
+10-28 00:16:13.652 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=98.12495718849833 program=96.1258646003535 errorA=60.0564176159368 errorB=9.074118551666288E-4
+10-28 00:16:13.652 10966 10987 I ResolvedUrlPlaybackTest: scenario=restart changed=true emptyCache=false media=98.37493079778133 program=96.37611906721584 errorA=60.05669847351614 errorB=0.0011882694345075606
+10-28 00:16:13.653 10966 10987 I ResolvedUrlPlaybackTest: boundary=95.76489795918367 A-before=33 B-after=9 maxErrorA=60.05669847351614 maxErrorB=60.05470470624304
+10-28 00:16:19.617 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=12 active=[12]
+10-28 00:16:19.839 10966 10966 I ResolvedUrlPlaybackTest: onLoadCanceled task=12 active=[]
+10-28 00:16:19.840 10966 10966 I ResolvedUrlPlaybackTest: onLoadStarted task=13 active=[13]
+10-28 00:16:26.717 10966 10966 I ResolvedUrlPlaybackTest: onLoadCompleted task=13 active=[]
+10-28 00:16:34.913 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=87.13287845432694 program=25.08124354364076 errorA=0.0038752933954526725 errorB=-60.05163491068618
+10-28 00:16:34.925 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=87.37506030604581 program=25.32036451299404 errorA=8.144110298644591E-4 errorB=-60.05469579305177
+10-28 00:16:34.927 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=87.62503538956531 program=25.570347720592338 errorA=8.225351086608157E-4 errorB=-60.054687668972974
+10-28 00:16:34.927 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=87.87515144071622 program=25.82045933428665 errorA=8.180976520613115E-4 errorB=-60.05469210642957
+10-28 00:16:34.928 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=88.12517482901802 program=26.070481721531195 errorA=8.170965948082198E-4 errorB=-60.05469310748683
+10-28 00:16:34.928 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=88.37510815271952 program=26.320414790263467 errorA=8.168416255820432E-4 errorB=-60.05469336245605
+10-28 00:16:34.928 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=88.62495392969629 program=26.570268476973744 errorA=8.247513590902145E-4 errorB=-60.054685452722545
+10-28 00:16:34.929 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=88.87493578503529 program=26.820245570040324 errorA=8.199890866684711E-4 errorB=-60.05469021499496
+10-28 00:16:34.929 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=89.1250520239314 program=27.070356788563096 errorA=8.149687133283123E-4 errorB=-60.05469523536831
+10-28 00:16:34.930 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=89.37507974623833 program=27.320386381756734 errorA=8.168396000414191E-4 errorB=-60.054693364481594
+10-28 00:16:34.930 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=89.6250214348965 program=27.570319533698186 errorA=8.083028833247852E-4 errorB=-60.054701901198314
+10-28 00:16:34.930 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=89.87487937427836 program=27.820185777143585 errorA=8.166069468558135E-4 errorB=-60.05469359713478
+10-28 00:16:34.931 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=90.12486712607921 program=28.0701690900096 errorA=8.121680120254382E-4 errorB=-60.05469803606961
+10-28 00:16:34.931 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=90.37498319081621 program=28.32028922453541 errorA=8.162378008371718E-4 errorB=-60.054693966280794
+10-28 00:16:34.932 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=90.62501473179917 program=28.57031846696425 errorA=8.13939246715023E-4 errorB=-60.05469626483492
+10-28 00:16:34.935 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=90.87496376431608 program=28.82026281301835 errorA=8.092527839060892E-4 errorB=-60.05470095129773
+10-28 00:16:34.936 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=91.12503670478007 program=29.070350305138486 errorA=8.238044400492583E-4 errorB=-60.05468639964158
+10-28 00:16:34.936 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=91.3750296338795 program=29.32033503622861 errorA=8.156064307378585E-4 errorB=-60.054694597650894
+10-28 00:16:34.939 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=91.62494122217532 program=29.570239616958453 errorA=8.085988647650311E-4 errorB=-60.05470160521687
+10-28 00:16:34.940 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=91.87497588092364 program=29.820276778748553 errorA=8.111019065459857E-4 errorB=-60.05469910217509
+10-28 00:16:34.940 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=92.12493150344446 program=30.070233143808252 errorA=8.118444454296991E-4 errorB=-60.054698359636205
+10-28 00:16:34.940 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=92.3750058250957 program=30.320310249899165 errorA=8.146288851023087E-4 errorB=-60.05469557519653
+10-28 00:16:34.941 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=92.62500340641955 program=30.570302892931146 errorA=8.096905932291065E-4 errorB=-60.054700513488406
+10-28 00:16:34.941 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=92.87492273780305 program=30.820236705788368 errorA=8.241720669559527E-4 errorB=-60.05468603201468
+10-28 00:16:34.957 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=93.12496015254001 program=31.07026600904017 errorA=8.160605817941757E-4 errorB=-60.054694143499844
+10-28 00:16:34.969 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=93.37492163220719 program=31.320223572190077 errorA=8.121440645219025E-4 errorB=-60.05469806001712
+10-28 00:16:34.970 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=93.62499715289664 program=31.5703105234643 errorA=8.235746492957219E-4 errorB=-60.05468662943234
+10-28 00:16:34.970 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=93.87499868619881 program=31.820317442773142 errorA=8.289606559692686E-4 errorB=-60.05468124342566
+10-28 00:16:34.971 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=94.12492516858003 program=32.07023107760911 errorA=8.161131107087272E-4 errorB=-60.054694090970926
+10-28 00:16:34.971 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=94.37496495118071 program=32.32026572915503 errorA=8.10982055952536E-4 errorB=-60.05469922202568
+10-28 00:16:34.972 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=94.62493163147832 program=32.57022946004575 errorA=8.080326490684797E-4 errorB=-60.05470217143257
+10-28 00:16:34.972 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=94.8750080304557 program=32.82030732368264 errorA=8.094973085732704E-4 errorB=-60.05470070677306
+10-28 00:16:34.972 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=95.1250131567697 program=33.07032999692812 errorA=8.270442400615252E-4 errorB=-60.054683159841574
+10-28 00:16:34.973 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=95.37494593990023 program=33.32024123365719 errorA=8.054978385985123E-4 errorB=-60.05470470624304
+10-28 00:16:34.973 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=95.62498786000396 program=33.570309840162004 errorA=8.321842396838974E-4 errorB=-60.05467801984195
+10-28 00:16:34.973 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=95.87495930201831 program=33.8202683103316 errorA=8.192123949228858E-4 errorB=-60.05469099168671
+10-28 00:16:34.990 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=96.12503630171757 program=34.07034860831608 errorA=8.225106801447168E-4 errorB=-60.05468769340149
+10-28 00:16:34.991 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=96.37504467037996 program=34.32036227995514 errorA=8.278136568122818E-4 errorB=-60.05468239042482
+10-28 00:16:34.991 10966 10987 I ResolvedUrlPlaybackTest: scenario=completed local download media=96.62498334692165 program=34.570292066322764 errorA=8.18923482746925E-4 errorB=-60.05469128059889
+10-28 00:16:34.991 10966 10987 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304
+10-28 00:17:04.217 10966 10987 I Media3ServiceRestartTest: pausedControllerPosition=17042 savedAfterShutdown=17545
+10-28 00:17:17.390 10966 10987 I Media3ServiceRestartTest: savedPosition=17545 restoredPosition=16745 resumedPosition=20670 requests=[GET original null, GET A null, HEAD original null, HEAD A null, GET original null, GET A null, GET A null, GET original null, GET A null, GET original null, GET B null, GET original null, GET B null, GET original null, GET B null, HEAD original null, HEAD B null, GET B bytes=626938-4370389]
+10-28 00:17:52.832 10966 10987 I Media3ServiceRestartTest: pause/resume requests=[GET original null, GET A null, HEAD original null, HEAD A null, GET original null, GET A null, GET A null, GET original null, GET A null]
+
+Runner result:
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+de.test.antennapod.playback.ResolvedEpisodeServerTest:
+INSTRUMENTATION_STATUS: test=switchingResolutionDoesNotChangeEitherRepresentation
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=switchingResolutionDoesNotChangeEitherRepresentation
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=resumingThrottledResponseDoesNotTruncateIt
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=resumingThrottledResponseDoesNotTruncateIt
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=rangesAndEndOfFileAreCoherent
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedEpisodeServerTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=rangesAndEndOfFileAreCoherent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+de.test.antennapod.playback.ResolvedUrlPlaybackTest:
+INSTRUMENTATION_STATUS: test=stableResolvedUrlAcrossPlayerRestartPreservesContent
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=stableResolvedUrlAcrossPlayerRestartPreservesContent
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=emptyCachePlaysCoherentBAtRestoredTimestamp
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=5
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=emptyCachePlaysCoherentBAtRestoredTimestamp
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=freshResolutionDoesNotMixRepresentations
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=6
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Inconsistent decoded representation: maxErrorA=60.05669847351614 maxErrorB=60.05470470624304 A-before=33 B-after=9
+	at org.junit.Assert.fail(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:11)
+	at org.junit.Assert.assertTrue(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertConsumedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:361)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertRestartedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:283)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.freshResolutionDoesNotMixRepresentations(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+
+INSTRUMENTATION_STATUS: stream=
+Error in freshResolutionDoesNotMixRepresentations(de.test.antennapod.playback.ResolvedUrlPlaybackTest):
+java.lang.AssertionError: Inconsistent decoded representation: maxErrorA=60.05669847351614 maxErrorB=60.05470470624304 A-before=33 B-after=9
+	at org.junit.Assert.fail(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:11)
+	at org.junit.Assert.assertTrue(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertConsumedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:361)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertRestartedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:283)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.freshResolutionDoesNotMixRepresentations(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+
+INSTRUMENTATION_STATUS: test=freshResolutionDoesNotMixRepresentations
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=completeDownloadKeepsContentAfterFreshResolutionChanges
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.ResolvedUrlPlaybackTest
+INSTRUMENTATION_STATUS: current=7
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=completeDownloadKeepsContentAfterFreshResolutionChanges
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.Media3ServiceRestartTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+de.test.antennapod.playback.Media3ServiceRestartTest:
+INSTRUMENTATION_STATUS: test=serviceRestartRestoresSavedPosition
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.Media3ServiceRestartTest
+INSTRUMENTATION_STATUS: current=8
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=serviceRestartRestoresSavedPosition
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.Media3ServiceRestartTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=pauseResumeContinuesSameEpisode
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=de.test.antennapod.playback.Media3ServiceRestartTest
+INSTRUMENTATION_STATUS: current=9
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=9
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=pauseResumeContinuesSameEpisode
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_RESULT: stream=
+
+Time: 248.176
+There was 1 failure:
+1) freshResolutionDoesNotMixRepresentations(de.test.antennapod.playback.ResolvedUrlPlaybackTest)
+java.lang.AssertionError: Inconsistent decoded representation: maxErrorA=60.05669847351614 maxErrorB=60.05470470624304 A-before=33 B-after=9
+	at org.junit.Assert.fail(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:11)
+	at org.junit.Assert.assertTrue(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertConsumedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:361)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.assertRestartedContent(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:283)
+	at de.test.antennapod.playback.ResolvedUrlPlaybackTest.freshResolutionDoesNotMixRepresentations(r8-map-id-a60ab2d588a269d93e4128c070db05d0ec902d0fb0a4fc2a5f8dbe5c343343b6:3)
+
+FAILURES!!!
+Tests run: 9,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1
