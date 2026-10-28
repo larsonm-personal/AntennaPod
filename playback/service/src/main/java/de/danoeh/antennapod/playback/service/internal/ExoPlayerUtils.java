@@ -154,26 +154,27 @@ public class ExoPlayerUtils {
             return defaultFactory.createMediaSource(mediaItem);
         }
 
+        private DefaultHttpDataSource.Factory httpFactory(String authHeader) {
+            DefaultHttpDataSource.Factory factory = new DefaultHttpDataSource.Factory()
+                    .setUserAgent(UserAgentInterceptor.USER_AGENT)
+                    .setAllowCrossProtocolRedirects(true).setKeepPostFor302Redirects(true);
+            if (authHeader != null) {
+                factory.setDefaultRequestProperties(Collections.singletonMap("Authorization", authHeader));
+            }
+            return factory;
+        }
+
         private DataSource.Factory buildDataSourceFactory(MediaItem mediaItem) {
-            DefaultHttpDataSource.Factory httpDataSourceFactory =
-                    new DefaultHttpDataSource.Factory();
-            httpDataSourceFactory.setUserAgent(UserAgentInterceptor.USER_AGENT);
-            httpDataSourceFactory.setAllowCrossProtocolRedirects(true);
-            httpDataSourceFactory.setKeepPostFor302Redirects(true);
             String authHeader = mediaItem.requestMetadata.extras != null
                     ? mediaItem.requestMetadata.extras.getString(
                             MediaItemAdapter.KEY_AUTHORIZATION_HEADER)
                     : null;
-            if (authHeader != null) {
-                httpDataSourceFactory.setDefaultRequestProperties(
-                        Collections.singletonMap("Authorization", authHeader));
-            }
             String uri = mediaItem.localConfiguration != null
                     ? mediaItem.localConfiguration.uri.toString() : "";
             StreamCacheGeneration generation = uri.startsWith("http") ? new StreamCacheGeneration(context, uri) : null;
             DataSource.Factory httpFactory = generation != null
-                    ? () -> new ValidatingStreamDataSource(httpDataSourceFactory.createDataSource(),
-                            simpleCache, generation) : httpDataSourceFactory;
+                    ? () -> new ValidatingStreamDataSource(httpFactory(authHeader),
+                            simpleCache, generation) : httpFactory(authHeader);
             DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpFactory);
             ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
             DataSource.Factory resolvingFactory = new ResolvingDataSource.Factory(dataSourceFactory, dataSpec -> {

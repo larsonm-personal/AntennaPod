@@ -3,6 +3,16 @@ package de.danoeh.antennapod.playback.service.internal;
 import android.net.Uri;
 import androidx.media3.common.C;
 import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.TransferListener;
+import androidx.media3.datasource.DataSource;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.io.IOException;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.cache.Cache;
 import androidx.media3.datasource.cache.ContentMetadataMutations;
@@ -141,6 +151,72 @@ public class ValidatingStreamDataSourceTest {
         });
         assertThrows(ValidatingStreamDataSource.ChangedException.class, () -> source.open(spec));
         verify(cache, never()).applyContentMetadataMutations(anyString(), any());
+    }
+
+    @Test
+    public void ignoredRangeChangedLengthIsRejectedBeforePrefixSkip() throws Exception {
+        checkIgnoredRange(90, true);
+    }
+
+    @Test
+    public void ignoredRangeUnchangedLengthRetainsNormalSkipBehavior() throws Exception {
+        checkIgnoredRange(1000, false);
+    }
+
+    private void checkIgnoredRange(int length, boolean changed) throws Exception {
+        ServerSocket server = new ServerSocket(0);
+        server.setSoTimeout(5000);
+        Thread response = new Thread(() -> {
+            try (Socket socket = server.accept()) {
+                socket.setSoTimeout(5000);
+                BufferedReader request = new BufferedReader(new InputStreamReader(
+                        socket.getInputStream(), StandardCharsets.US_ASCII));
+                while (!request.readLine().isEmpty()) {
+                }
+                socket.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Type: audio/mpeg\r\n"
+                        + "Content-Length: " + length + "\r\nConnection: close\r\n\r\n")
+                        .getBytes(StandardCharsets.US_ASCII));
+                socket.getOutputStream().write(new byte[length]);
+            } catch (IOException disconnected) {
+            }
+        }, "full-response-test");
+        response.start();
+        AtomicInteger transferred = new AtomicInteger();
+        DataSpec local = spec.buildUpon().setUri("http://127.0.0.1:" + server.getLocalPort() + "/A").build();
+        ContentMetadataMutations metadata = new ContentMetadataMutations();
+        ContentMetadataMutations.setContentLength(metadata, 1000);
+        ContentMetadataMutations.setRedirectedUri(metadata, local.uri);
+        when(cache.getContentMetadata(anyString())).thenReturn(
+                new DefaultContentMetadata().copyWithMutationsApplied(metadata));
+        source = new ValidatingStreamDataSource(new DefaultHttpDataSource.Factory(), cache,
+                new StreamCacheGeneration(RuntimeEnvironment.getApplication(), local.uri.toString()));
+        source.addTransferListener(new TransferListener() {
+            @Override
+            public void onTransferInitializing(DataSource source, DataSpec spec, boolean network) { }
+            @Override
+            public void onTransferStart(DataSource source, DataSpec spec, boolean network) { }
+            @Override
+            public void onTransferEnd(DataSource source, DataSpec spec, boolean network) { }
+            @Override
+            public void onBytesTransferred(DataSource source, DataSpec spec, boolean network, int count) {
+                transferred.addAndGet(count);
+            }
+        });
+        try {
+            if (changed) {
+                assertThrows(ValidatingStreamDataSource.ChangedException.class, () -> source.open(local));
+                assertEquals(0, transferred.get());
+                verify(cache, never()).applyContentMetadataMutations(anyString(), any());
+            } else {
+                assertEquals(100, source.open(local));
+                assertEquals(100, transferred.get());
+            }
+        } finally {
+            source.close();
+            server.close();
+            response.join(5000);
+            assertFalse(response.isAlive());
+        }
     }
 
     private HttpDataSource.InvalidResponseCodeException responseError(int code,

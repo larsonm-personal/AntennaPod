@@ -6,6 +6,7 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.C;
 import androidx.media3.datasource.DataSource;
 import androidx.media3.datasource.DataSpec;
+import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.HttpUtil;
 import androidx.media3.datasource.TransferListener;
@@ -24,6 +25,24 @@ public final class ValidatingStreamDataSource implements DataSource {
     private final Cache cache;
     private final StreamCacheGeneration generation;
 
+    private DataSpec openingSpec;
+    private IOException rejectedResponse;
+
+    public ValidatingStreamDataSource(DefaultHttpDataSource.Factory factory, Cache cache,
+                                     StreamCacheGeneration generation) {
+        this.cache = cache;
+        this.generation = generation;
+        upstream = factory.setContentTypePredicate(type -> {
+            try {
+                validateResponse(openingSpec, false);
+                return true;
+            } catch (IOException error) {
+                rejectedResponse = error;
+                return false;
+            }
+        }).createDataSource();
+    }
+
     public ValidatingStreamDataSource(HttpDataSource upstream, Cache cache, StreamCacheGeneration generation) {
         this.upstream = upstream;
         this.cache = cache;
@@ -32,6 +51,8 @@ public final class ValidatingStreamDataSource implements DataSource {
 
     @Override
     public long open(DataSpec spec) throws IOException {
+        openingSpec = spec;
+        rejectedResponse = null;
         if (spec.key == null) {
             return upstream.open(spec);
         }
@@ -43,6 +64,8 @@ public final class ValidatingStreamDataSource implements DataSource {
         long result;
         try {
             result = upstream.open(spec);
+        } catch (HttpDataSource.InvalidContentTypeException error) {
+            throw rejectedResponse == null ? error : rejectedResponse;
         } catch (HttpDataSource.InvalidResponseCodeException error) {
             long rejectedLength = error.responseCode == 416 ? totalLength(416, error.headerFields) : C.LENGTH_UNSET;
             if (previousLength != C.LENGTH_UNSET && rejectedLength != C.LENGTH_UNSET
@@ -54,14 +77,25 @@ public final class ValidatingStreamDataSource implements DataSource {
             }
             throw error;
         }
+        validateResponse(spec, true);
+        return result;
+    }
+
+    private void validateResponse(DataSpec spec, boolean store) throws IOException {
+        if (spec == null || spec.key == null) {
+            return;
+        }
         long length = totalLength(upstream.getResponseCode(), upstream.getResponseHeaders());
         synchronized (cache) {
-            metadata = cache.getContentMetadata(spec.key);
-            previousLength = ContentMetadata.getContentLength(metadata);
-            previousUri = getCachedUri(metadata);
+            ContentMetadata metadata = cache.getContentMetadata(spec.key);
+            long previousLength = ContentMetadata.getContentLength(metadata);
+            Uri previousUri = getCachedUri(metadata);
             if ((previousLength != C.LENGTH_UNSET && length != C.LENGTH_UNSET && previousLength != length)
                     || (previousUri != null && !previousUri.equals(upstream.getUri()))) {
                 throw new ChangedException(generation, spec.uri.toString(), false, null);
+            }
+            if (!store) {
+                return;
             }
             ContentMetadataMutations mutations = new ContentMetadataMutations();
             if (length != C.LENGTH_UNSET) {
@@ -70,7 +104,6 @@ public final class ValidatingStreamDataSource implements DataSource {
             mutations.set("custom_stream_actual_uri", upstream.getUri().toString());
             cache.applyContentMetadataMutations(spec.key, mutations);
         }
-        return result;
     }
 
     static Uri getCachedUri(ContentMetadata metadata) {
