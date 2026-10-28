@@ -143,6 +143,40 @@ public class ResolvedUrlPlaybackTest {
     }
 
     @Test
+    public void fullyCachedRestartPreservesContentWithoutRedownloading() throws Exception {
+        MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player = ExoPlayerUtils.buildPlayer(context);
+            observeMediaLoads();
+            player.setMediaItem(media);
+            player.prepare();
+        });
+        AtomicBoolean buffered = new AtomicBoolean();
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                assertNull("Initial playback error", player.getPlayerError());
+                buffered.set(player.getPlaybackState() == Player.STATE_READY
+                        && !player.isLoading() && player.getBufferedPercentage() == 100);
+            });
+            return buffered.get();
+        });
+        cancelLoadingAndWait();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.release();
+            player = null;
+            ExoPlayerUtils.releaseCache();
+        });
+        long beforeRestart = server.getResponseBodyBytes();
+        assertTrue("Initial transfer was not counted", beforeRestart >= initial.length());
+        playResolved(media, RESUME_MS);
+        awaitResolvedContent();
+        assertConsumedContent("fully cached restart", INITIAL_AD_SECONDS);
+        long restartBytes = server.getResponseBodyBytes() - beforeRestart;
+        Log.i(TAG, "cached restart bodyBytes=" + restartBytes + " episodeBytes=" + initial.length());
+        assertTrue("Restart downloaded " + restartBytes + " bytes", restartBytes < initial.length() / 10);
+    }
+
+    @Test
     public void stableResolvedUrlAcrossPlayerRestartPreservesContent() throws Exception {
         assertRestartedContent(false, false);
     }

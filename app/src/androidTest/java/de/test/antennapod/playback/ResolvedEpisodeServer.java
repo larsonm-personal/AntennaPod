@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +33,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile boolean expiredA;
     private volatile int connectionGeneration;
     private volatile int interruptedResponses;
+    private final AtomicLong responseBodyBytes = new AtomicLong();
 
     public void start(File a, File b) throws Exception {
         initial = a;
@@ -80,6 +82,10 @@ public class ResolvedEpisodeServer extends HTTPBin {
 
     public void disconnectActiveResponses() {
         connectionGeneration++;
+    }
+
+    public long getResponseBodyBytes() {
+        return responseBodyBytes.get();
     }
 
     public int getInterruptedResponses() {
@@ -221,6 +227,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
                 int count = source.read(buffer, offset, length);
                 if (count > 0) {
                     sent += count;
+                    responseBodyBytes.addAndGet(count);
                 }
                 return count;
             }
