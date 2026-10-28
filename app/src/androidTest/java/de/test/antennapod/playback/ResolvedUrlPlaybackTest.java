@@ -209,13 +209,165 @@ public class ResolvedUrlPlaybackTest {
         }
     }
 
+    @Test
+    public void sameResolvedUrlLengthChangeDoesNotMixContent() throws Exception {
+        MediaItem media = primeCachedEpisode();
+        server.replaceAWithB();
+        playResolved(media, RESUME_MS);
+        awaitResolvedContent();
+        Log.i(TAG, "synthetic same-URL mutation requests=" + server.getRequests());
+        assertConsumedContent("synthetic same-URL length change", 0);
+    }
+
+    @Test
+    public void interruptedStreamReconnectsWithinSamePlayer() throws Exception {
+        server.throttleResponsesAfter(THROTTLE_AFTER_BYTES);
+        MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
+        playResolved(media, INITIAL_SEEK_MS);
+        awaitPrimedAudio();
+        final ExoPlayer originalPlayer = player;
+        server.disconnectActiveResponses();
+        server.resumeResponses();
+        awaitResolvedContent();
+        assertTrue("No response was interrupted", server.getInterruptedResponses() > 0);
+        assertTrue("Player was replaced", player == originalPlayer);
+        Log.i(TAG, "synthetic disconnect requests=" + server.getRequests());
+        assertConsumedContent("synthetic disconnect, stable A", INITIAL_AD_SECONDS);
+    }
+
+    @Test
+    public void changedVariantRemainsAccessibleAcrossBackwardAndForwardSeeks() throws Exception {
+        MediaItem media = primeCachedEpisode();
+        server.switchFreshResolutionsToB();
+        playResolved(media, RESUME_MS);
+        awaitResolvedContent();
+        double selectedAdSeconds = observedAdSeconds();
+        double worst = 0;
+        for (long position : new long[] {75000, 105000, 85000}) {
+            worst = Math.max(worst, seekAndMeasureContent(position, selectedAdSeconds));
+        }
+        Log.i(TAG, "variant-switch seeks requests=" + server.getRequests());
+        assertTrue("Selected content inaccessible after seeking: maxError=" + worst, worst < TOLERANCE_SECONDS);
+    }
+
+    @Test
+    public void seekObservationMatchesBothStableEditions() throws Exception {
+        for (String edition : new String[] {"A", "B"}) {
+            observationEndMs = MIN_OBSERVATION_END_MS;
+            playResolved(MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/" + edition), RESUME_MS);
+            awaitResolvedContent();
+            double adSeconds = edition.equals("A") ? INITIAL_AD_SECONDS : CHANGED_AD_SECONDS;
+            assertEquals(adSeconds, observedAdSeconds(), 0);
+            double worst = 0;
+            for (long position : new long[] {75000, 105000, 85000}) {
+                worst = Math.max(worst, seekAndMeasureContent(position, adSeconds));
+            }
+            assertTrue("Stable " + edition + " seek error=" + worst, worst < TOLERANCE_SECONDS);
+            cancelLoadingAndWait();
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                player.release();
+                player = null;
+                ExoPlayerUtils.releaseCache();
+            });
+        }
+    }
+
+    private void awaitPrimedAudio() {
+        try {
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(
+                    () -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> Log.i(TAG,
+                    "priming prefix=" + server.hasSentPrefix() + " state=" + player.getPlaybackState()
+                            + " position=" + player.getCurrentPosition() + " consumedUs="
+                            + (sink == null ? -1 : sink.consumedUs) + " error=" + player.getPlayerError()));
+        }
+    }
+
+    private MediaItem primeCachedEpisode() throws Exception {
+        server.throttleResponsesAfter(THROTTLE_AFTER_BYTES);
+        MediaItem media = MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/original");
+        playResolved(media, INITIAL_SEEK_MS);
+        awaitPrimedAudio();
+        cancelLoadingAndWait();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.stop();
+            player.release();
+            player = null;
+            ExoPlayerUtils.releaseCache();
+        });
+        server.resumeResponses();
+        long end = cachedEndAtResume();
+        double boundary = frameTimeAt(end);
+        if (boundary > RESUME_MS / 1000.0 + 2 && end < initial.length()) {
+            observationBoundary = boundary;
+            observationEndMs = Math.max(MIN_OBSERVATION_END_MS, (long) ((boundary + 3) * 1000));
+        }
+        Log.i(TAG, "primed cachedEndBytes=" + end + " cacheEndSeconds=" + boundary);
+        return media;
+    }
+
+    private double observedAdSeconds() {
+        List<double[]> windows = sink.consumedWindows();
+        assertTrue("Insufficient PCM to identify selected edition", windows.size() >= 8);
+        double errorA = 0;
+        double errorB = 0;
+        for (double[] window : windows.subList(windows.size() - 8, windows.size())) {
+            double observed = (window[1] - 20) / ((10000.0 - 20) / 120);
+            errorA = Math.max(errorA, Math.abs(observed - (window[0] - INITIAL_AD_SECONDS)));
+            errorB = Math.max(errorB, Math.abs(observed - (window[0] - CHANGED_AD_SECONDS)));
+        }
+        assertTrue("Latest consumed audio identifies neither edition", Math.min(errorA, errorB) < TOLERANCE_SECONDS);
+        return errorA < errorB ? INITIAL_AD_SECONDS : CHANGED_AD_SECONDS;
+    }
+
+    private double seekAndMeasureContent(long position, double selectedAdSeconds) throws Exception {
+        cancelLoadingAndWait();
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> player.seekTo(position));
+        observeAudioAt(position);
+        observationEndMs = position + 3500;
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.setTrackSelectionParameters(player.getTrackSelectionParameters().buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false).build());
+            player.play();
+        });
+        awaitResolvedContent();
+        assertFalse("Audio output recreated after seek", outputRecreated);
+        assertFalse("PCM discarded after seek", sink.discardedAfterPcm);
+        List<double[]> windows = sink.consumedWindows();
+        assertTrue("Insufficient consumed PCM after seek", windows.size() >= 8);
+        double worst = 0;
+        for (double[] window : windows) {
+            double observed = (window[1] - 20) / ((10000.0 - 20) / 120);
+            double error = observed - (window[0] - selectedAdSeconds);
+            Log.i(TAG, "seekTarget=" + position + " media=" + window[0] + " program=" + observed
+                    + " selectedAdSeconds=" + selectedAdSeconds + " error=" + error);
+            worst = Math.max(worst, Math.abs(error));
+        }
+        return worst;
+    }
+
     private void playResolved(MediaItem media, long position) throws Exception {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player = ExoPlayerUtils.buildPlayer(context);
+            observeMediaLoads();
+        });
+        observeAudioAt(position);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+            player.setSkipSilenceEnabled(false);
+            player.setPlaybackSpeed(1);
+            player.setMediaItem(media, position);
+            player.prepare();
+            player.play();
+        });
+    }
+
+    private void observeAudioAt(long position) throws Exception {
         List<PlayerMessage> messages = new ArrayList<>();
         sink = null;
         outputRecreated = false;
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            player = ExoPlayerUtils.buildPlayer(context);
-            observeMediaLoads();
             AudioOutputProvider provider = new ForwardingAudioOutputProvider(
                     new AudioTrackAudioOutputProvider.Builder(context).build()) {
                 @Override
@@ -238,13 +390,6 @@ public class ResolvedUrlPlaybackTest {
         });
         assertEquals(1, messages.size());
         messages.get(0).blockUntilDelivered(5000);
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
-            player.setSkipSilenceEnabled(false);
-            player.setPlaybackSpeed(1);
-            player.setMediaItem(media, position);
-            player.prepare();
-            player.play();
-        });
     }
 
     private void observeMediaLoads() {

@@ -10,6 +10,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
@@ -87,6 +88,46 @@ public class ResolvedEpisodeServerTest {
     public void resumingThrottledResponseDoesNotTruncateIt() throws Exception {
         assertThrottledResponse(0);
         assertThrottledResponse(1000);
+    }
+
+    @Test
+    public void syntheticMutationChangesLengthAtSameEndpoint() throws Exception {
+        assertArrayEquals(bytesA, read("A", null, 200));
+        server.replaceAWithB();
+        assertRedirect("HEAD", "A");
+        assertArrayEquals(bytesB, read("A", null, 200));
+        HttpURLConnection head = open("A", "HEAD", null);
+        try {
+            assertEquals(200, head.getResponseCode());
+            assertEquals(bytesB.length, head.getContentLength());
+        } finally {
+            head.disconnect();
+        }
+    }
+
+    @Test
+    public void syntheticDisconnectLeavesSubsequentRequestsComplete() throws Exception {
+        server.throttleResponsesAfter(1024);
+        HttpURLConnection response = open("A", "GET", null);
+        int received = 1024;
+        try (InputStream input = response.getInputStream()) {
+            IOUtils.readFully(input, new byte[1024]);
+            Awaitility.await().atMost(5, TimeUnit.SECONDS).until(server::hasSentPrefix);
+            server.disconnectActiveResponses();
+            server.resumeResponses();
+            try {
+                while (input.read() != -1) {
+                    received++;
+                }
+            } catch (IOException interrupted) {
+                assertTrue("No synthetic interruption", server.getInterruptedResponses() > 0);
+            }
+            assertTrue("Response was not cut short", received < bytesA.length);
+            assertTrue("No response interrupted", server.getInterruptedResponses() > 0);
+        } finally {
+            response.disconnect();
+        }
+        assertArrayEquals(bytesA, read("A", null, 200));
     }
 
     private void assertThrottledResponse(int start) throws Exception {

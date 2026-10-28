@@ -27,6 +27,9 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile CountDownLatch responseGate = new CountDownLatch(0);
     private volatile int throttleAfter;
     private volatile boolean prefixSent;
+    private volatile boolean replaceA;
+    private volatile int connectionGeneration;
+    private volatile int interruptedResponses;
 
     public void start(File a, File b) throws Exception {
         initial = a;
@@ -55,6 +58,18 @@ public class ResolvedEpisodeServer extends HTTPBin {
         if (!switched.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Server scenario did not switch to B");
         }
+    }
+
+    public void replaceAWithB() {
+        replaceA = true;
+    }
+
+    public void disconnectActiveResponses() {
+        connectionGeneration++;
+    }
+
+    public int getInterruptedResponses() {
+        return interruptedResponses;
     }
 
     public void throttleResponsesAfter(int bytes) {
@@ -120,7 +135,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
         if (!name.equals("A") && !name.equals("B")) {
             return new Response(Response.Status.NOT_FOUND, "text/plain", "");
         }
-        File file = name.equals("A") ? initial : changed;
+        File file = name.equals("A") && !replaceA ? initial : changed;
         long start = 0;
         long end = file.length() - 1;
         if (range != null) {
@@ -147,6 +162,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
         }
         CountDownLatch gate = responseGate;
         boolean throttle = session.getMethod() == Method.GET && gate.getCount() > 0;
+        int generation = connectionGeneration;
         InputStream body = new InputStream() {
             private final ByteArrayInputStream source = new ByteArrayInputStream(bytes);
             private int sent;
@@ -176,6 +192,10 @@ public class ResolvedEpisodeServer extends HTTPBin {
                     }
                 } else if (throttle) {
                     length = Math.min(length, throttleAfter - sent);
+                }
+                if (generation != connectionGeneration) {
+                    interruptedResponses++;
+                    throw new IOException("Synthetic response disconnection");
                 }
                 int count = source.read(buffer, offset, length);
                 if (count > 0) {
