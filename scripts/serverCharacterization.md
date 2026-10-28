@@ -674,3 +674,37 @@ passed debug/release builds and focused Checkstyle. Its separate nine-case relea
 run also passed all eight controls and failed only the unchanged content assertion
 (A-before=33, B-after=9, maxErrorA=60.0566985 seconds). Hosted qualification is
 [run 40607883448](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448).
+
+Hosted qualification completed on that same review commit. All 15 attempts
+reached the mixed-content assertion: 30 A windows before the boundary, 9 or 10 B
+windows afterward, and maximum A error 60.0566–60.0892 seconds. Stable A,
+empty-cache B, completed downloads, server checks and service checks passed.
+There were no playback setup or linkage failures. Static analysis, wrapper
+validation and all three unit/build jobs passed. CI remains red for the intended
+content failure; the retry policy was unchanged.
+
+| Configuration | Target assertion failures | Added diagnostic lines | Report artifact |
+| --- | --- | --- | --- |
+| API 23 debug | 3/3 | 101 | [12783281146](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783281146) |
+| API 23 release | 3/3 | 95 | [12782951971](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12782951971) |
+| API 30 debug | 3/3 | 89 | [12783326056](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783326056) |
+| API 36 debug | 3/3 | 101 | [12783315904](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783315904) |
+| API 36 release | 3/3 | 101 | [12781084988](https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12781084988) |
+
+API 23 debug attempt 2 also failed the unchanged
+`TextOnlyFeedsTest.testMarkAsPlayedList`: Espresso reported a single-click
+view-constraint failure. That test passed in attempts 1 and 3. Its cause was not
+established, and it is not counted as playback reproduction evidence. Every
+attempt announced 79 app tests; Gradle's finished totals also include the existing
+assumption skips. The transcript preserves the original count messages.
+
+All five report uploads and their non-expired metadata were verified, with no
+capture or report-copy warnings. The transcript records artifact sizes/digests
+and job-log hashes. ZIP contents were not independently opened here; earlier
+archive retrieval from this executor returned HTTP 403. The new API 23 UI failure's
+full report is in `test-report-api-23-debug`, `ci-emulator/attempt-2/`.
+
+These runs support the corrected setup's repeatability across the tested devices.
+They do not prove that stale-span deletion caused the earlier coherent-B pass,
+or that this synthetic scenario is the user's actual lifecycle. The test remains
+under review; PR #8441 has not been inspected or applied.

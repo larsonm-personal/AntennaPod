@@ -3861,3 +3861,421 @@ Tests run: 9,  Failures: 1
 
 
 INSTRUMENTATION_CODE: -1
+
+=== Hosted qualification: run 40607883448, review 3f2701a79036792ff16304d86c7e9a7ccea304d7 ===
+
+Job 122554092171; log SHA-256: 4c1b105bcd670be472043d2fc54371e73d448869b0e68467762d2cf760a949ec
+{
+  "attempts": [
+    [
+      "23",
+      "debug",
+      "1",
+      "1"
+    ],
+    [
+      "23",
+      "debug",
+      "2",
+      "1"
+    ],
+    [
+      "23",
+      "debug",
+      "3",
+      "1"
+    ]
+  ],
+  "completed_counts": [],
+  "runner_counts": [
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 1 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0",
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 2 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0",
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 1 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0"
+  ],
+  "failed_cases": [
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED ",
+    "de.test.antennapod.ui.TextOnlyFeedsTest > testMarkAsPlayedList[emulator-5554 - 6.0] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED "
+  ],
+  "boundaries": [
+    "  10-28 00:35:13.233  2808  2822 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:35:41.976  2808  2822 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:36:10.608  2808  2822 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:36:20.942  2808  2822 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:40:13.166  3550  3564 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:40:41.916  3550  3564 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:41:10.533  3550  3564 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:41:20.907  3550  3564 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:45:08.505  4257  4271 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:45:37.451  4257  4271 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:46:06.170  4257  4271 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:46:16.526  4257  4271 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304"
+  ],
+  "diagnostic_lines": 101,
+  "capture_warnings": [],
+  "artifact_uploads": [
+    "Artifact test-report-api-23-debug has been successfully uploaded! Final size is 673743 bytes. Artifact ID is 12783281146",
+    "Artifact download URL: https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783281146"
+  ],
+  "linkage_errors": []
+}
+
+Additional failure excerpt:
+2026-10-28T00:43:20.7008956Z de.test.antennapod.ui.TextOnlyFeedsTest > testMarkAsPlayedList[emulator-5554 - 6.0] [31mFAILED [0m
+2026-10-28T00:43:20.7011111Z 	androidx.test.espresso.PerformException: Error performing 'single click' on view 'Animations or transitions are enabled on the target device.
+2026-10-28T00:43:20.7012999Z 	For more info check: https://developer.android.com/training/testing/espresso/setup#set-up-environment
+2026-10-28T00:43:22.2017706Z Tests on emulator-5554 - 6.0 failed: There was 2 failure(s).
+
+Job 122554092154; log SHA-256: f69241df0b026d2123cbb00ca981897e10b23c6b7a18e24158c22acdc6187f9d
+{
+  "attempts": [
+    [
+      "23",
+      "release",
+      "1",
+      "1"
+    ],
+    [
+      "23",
+      "release",
+      "2",
+      "1"
+    ],
+    [
+      "23",
+      "release",
+      "3",
+      "1"
+    ]
+  ],
+  "completed_counts": [],
+  "runner_counts": [
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 1 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0",
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 1 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0",
+    "Starting 79 tests on emulator-5554 - 6.0",
+    "Tests on emulator-5554 - 6.0 failed: There was 1 failure(s).",
+    "Finished 82 tests on emulator-5554 - 6.0"
+  ],
+  "failed_cases": [
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 6.0] FAILED "
+  ],
+  "boundaries": [
+    "  10-28 00:34:20.001  2802  2816 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:34:48.961  2802  2816 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:35:17.694  2802  2816 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:35:28.083  2802  2816 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:39:16.129  3547  3561 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:39:44.889  3547  3561 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:40:13.529  3547  3561 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:40:23.912  3547  3561 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:44:10.160  4262  4276 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:44:38.920  4262  4276 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:45:07.657  4262  4276 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:45:18.040  4262  4276 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304"
+  ],
+  "diagnostic_lines": 95,
+  "capture_warnings": [],
+  "artifact_uploads": [
+    "Artifact test-report-api-23-release has been successfully uploaded! Final size is 687096 bytes. Artifact ID is 12782951971",
+    "Artifact download URL: https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12782951971"
+  ],
+  "linkage_errors": []
+}
+
+Job 122554092017; log SHA-256: ad96a729c2519d7ea311e5bd7c4795e315e4d9f701582f13a82e2dc728054b61
+{
+  "attempts": [
+    [
+      "30",
+      "debug",
+      "1",
+      "1"
+    ],
+    [
+      "30",
+      "debug",
+      "2",
+      "1"
+    ],
+    [
+      "30",
+      "debug",
+      "3",
+      "1"
+    ]
+  ],
+  "completed_counts": [],
+  "runner_counts": [
+    "Starting 79 tests on emulator-5554 - 11",
+    "Tests on emulator-5554 - 11 failed: There was 1 failure(s).",
+    "Finished 81 tests on emulator-5554 - 11",
+    "Starting 79 tests on emulator-5554 - 11",
+    "Tests on emulator-5554 - 11 failed: There was 1 failure(s).",
+    "Finished 81 tests on emulator-5554 - 11",
+    "Starting 79 tests on emulator-5554 - 11",
+    "Tests on emulator-5554 - 11 failed: There was 1 failure(s).",
+    "Finished 81 tests on emulator-5554 - 11"
+  ],
+  "failed_cases": [
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 11] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 11] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 11] FAILED "
+  ],
+  "boundaries": [
+    "  10-28 00:32:44.130  1775  1798 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:33:13.260  1775  1798 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=10 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:33:42.069  1775  1798 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:33:52.490  1775  1798 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:37:04.590  2917  2938 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:37:33.690  2917  2938 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:38:02.733  2917  2938 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=10 maxErrorA=60.089171328176526 maxErrorB=60.05470217143257",
+    "  10-28 00:38:13.302  2917  2938 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:41:24.626  3882  3903 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:41:53.791  3882  3903 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=10 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:42:22.897  3882  3903 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=10 maxErrorA=60.089171328176526 maxErrorB=60.05470217143257",
+    "  10-28 00:42:33.528  3882  3903 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304"
+  ],
+  "diagnostic_lines": 89,
+  "capture_warnings": [],
+  "artifact_uploads": [
+    "Artifact test-report-api-30-debug has been successfully uploaded! Final size is 1340773 bytes. Artifact ID is 12783326056",
+    "Artifact download URL: https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783326056"
+  ],
+  "linkage_errors": []
+}
+
+Job 122554092056; log SHA-256: 3b0ab6bcb43b686dec574f0a07b11a094f00d2e06d6e20c2b0cf5cced99db47a
+{
+  "attempts": [
+    [
+      "36",
+      "debug",
+      "1",
+      "1"
+    ],
+    [
+      "36",
+      "debug",
+      "2",
+      "1"
+    ],
+    [
+      "36",
+      "debug",
+      "3",
+      "1"
+    ]
+  ],
+  "completed_counts": [],
+  "runner_counts": [
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16",
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16",
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16"
+  ],
+  "failed_cases": [
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED "
+  ],
+  "boundaries": [
+    "  10-28 00:33:30.496  2161  2178 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:33:59.399  2161  2178 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:34:28.324  2161  2178 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:34:38.868  2161  2178 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:37:50.499  2982  2997 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:38:19.700  2982  2997 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:38:48.520  2982  2997 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:38:58.966  2982  2997 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:42:11.110  3732  3748 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:42:40.319  3732  3748 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:43:09.462  3732  3748 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=30 B-after=9 maxErrorA=60.089171328176526 maxErrorB=60.05470217143257",
+    "  10-28 00:43:20.002  3732  3748 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304"
+  ],
+  "diagnostic_lines": 101,
+  "capture_warnings": [],
+  "artifact_uploads": [
+    "Artifact test-report-api-36-debug has been successfully uploaded! Final size is 1581737 bytes. Artifact ID is 12783315904",
+    "Artifact download URL: https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12783315904"
+  ],
+  "linkage_errors": []
+}
+
+Job 122554092019; log SHA-256: 49e148ec9d8cea8a3d7ba40edede7118cf489fc7826962b34dd60dca2a61e32f
+{
+  "attempts": [
+    [
+      "36",
+      "release",
+      "1",
+      "1"
+    ],
+    [
+      "36",
+      "release",
+      "2",
+      "1"
+    ],
+    [
+      "36",
+      "release",
+      "3",
+      "1"
+    ]
+  ],
+  "completed_counts": [],
+  "runner_counts": [
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16",
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16",
+    "Starting 79 tests on emulator-5554 - 16",
+    "Tests on emulator-5554 - 16 failed: There was 1 failure(s).",
+    "Finished 83 tests on emulator-5554 - 16"
+  ],
+  "failed_cases": [
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED ",
+    "de.test.antennapod.playback.ResolvedUrlPlaybackTest > freshResolutionDoesNotMixRepresentations[emulator-5554 - 16] FAILED "
+  ],
+  "boundaries": [
+    "  10-28 00:30:41.562  2174  2188 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:31:10.207  2174  2188 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:31:38.820  2174  2188 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:31:49.210  2174  2188 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:34:52.372  2991  3008 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:35:21.416  2991  3008 I ResolvedUrlPlaybackTest: boundary=95.00734693877551 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:35:50.044  2991  3008 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:36:00.334  2991  3008 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304",
+    "  10-28 00:39:01.569  3758  3772 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470813969472",
+    "  10-28 00:39:30.189  3758  3772 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=0 B-after=9 maxErrorA=60.05661509932518 maxErrorB=0.11687779611297344",
+    "  10-28 00:39:58.799  3758  3772 I ResolvedUrlPlaybackTest: boundary=94.95510204081633 A-before=30 B-after=9 maxErrorA=60.05660374334307 maxErrorB=60.05470217143257",
+    "  10-28 00:40:09.176  3758  3772 I ResolvedUrlPlaybackTest: boundary=90.0 A-before=10 B-after=0 maxErrorA=0.0038752933954526725 maxErrorB=60.05470470624304"
+  ],
+  "diagnostic_lines": 101,
+  "capture_warnings": [],
+  "artifact_uploads": [
+    "Artifact test-report-api-36-release has been successfully uploaded! Final size is 1535985 bytes. Artifact ID is 12781084988",
+    "Artifact download URL: https://github.com/larsonm-personal/AntennaPod/actions/runs/40607883448/artifacts/12781084988"
+  ],
+  "linkage_errors": []
+}
+
+Uploaded report artifact metadata:
+[
+  {
+    "id": 12783326056,
+    "name": "test-report-api-30-debug",
+    "size_in_bytes": 1340773,
+    "url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783326056",
+    "archive_download_url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783326056/zip",
+    "expired": false,
+    "created_at": "2026-10-28T00:44:21Z",
+    "expires_at": "2027-01-26T00:18:08Z",
+    "updated_at": "2026-10-28T00:44:21Z",
+    "digest": "sha256:d3be2a95cea9fe0410047f6e389215b5a359ffd0f2b9f88bc7d4fbf7cba440d7",
+    "workflow_run": {
+      "id": 40607883448,
+      "repository_id": 1434821423,
+      "head_repository_id": 1434821423,
+      "head_branch": "playback-resolution-review",
+      "head_sha": "3f2701a79036792ff16304d86c7e9a7ccea304d7"
+    }
+  },
+  {
+    "id": 12783315904,
+    "name": "test-report-api-36-debug",
+    "size_in_bytes": 1581737,
+    "url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783315904",
+    "archive_download_url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783315904/zip",
+    "expired": false,
+    "created_at": "2026-10-28T00:45:06Z",
+    "expires_at": "2027-01-26T00:18:08Z",
+    "updated_at": "2026-10-28T00:45:06Z",
+    "digest": "sha256:2d1cbe6774d93c6b84f1c733c716ba7b240908b8cccb624d15f7e024fde11e3f",
+    "workflow_run": {
+      "id": 40607883448,
+      "repository_id": 1434821423,
+      "head_repository_id": 1434821423,
+      "head_branch": "playback-resolution-review",
+      "head_sha": "3f2701a79036792ff16304d86c7e9a7ccea304d7"
+    }
+  },
+  {
+    "id": 12783281146,
+    "name": "test-report-api-23-debug",
+    "size_in_bytes": 673743,
+    "url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783281146",
+    "archive_download_url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12783281146/zip",
+    "expired": false,
+    "created_at": "2026-10-28T00:48:24Z",
+    "expires_at": "2027-01-26T00:18:08Z",
+    "updated_at": "2026-10-28T00:48:24Z",
+    "digest": "sha256:36f56cdf02a277f5b68deef724d593ac9147cb5577852ad39536f730ff8b627b",
+    "workflow_run": {
+      "id": 40607883448,
+      "repository_id": 1434821423,
+      "head_repository_id": 1434821423,
+      "head_branch": "playback-resolution-review",
+      "head_sha": "3f2701a79036792ff16304d86c7e9a7ccea304d7"
+    }
+  },
+  {
+    "id": 12782951971,
+    "name": "test-report-api-23-release",
+    "size_in_bytes": 687096,
+    "url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12782951971",
+    "archive_download_url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12782951971/zip",
+    "expired": false,
+    "created_at": "2026-10-28T00:47:28Z",
+    "expires_at": "2027-01-26T00:18:08Z",
+    "updated_at": "2026-10-28T00:47:28Z",
+    "digest": "sha256:ce7aa45fd6503c21f4a6b3705ac045bb2ac4010b93ae75da8336aabbeb1eda8d",
+    "workflow_run": {
+      "id": 40607883448,
+      "repository_id": 1434821423,
+      "head_repository_id": 1434821423,
+      "head_branch": "playback-resolution-review",
+      "head_sha": "3f2701a79036792ff16304d86c7e9a7ccea304d7"
+    }
+  },
+  {
+    "id": 12781084988,
+    "name": "test-report-api-36-release",
+    "size_in_bytes": 1535985,
+    "url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12781084988",
+    "archive_download_url": "https://api.github.com/repos/larsonm-personal/AntennaPod/actions/artifacts/12781084988/zip",
+    "expired": false,
+    "created_at": "2026-10-28T00:41:49Z",
+    "expires_at": "2027-01-26T00:18:08Z",
+    "updated_at": "2026-10-28T00:41:49Z",
+    "digest": "sha256:29a72a8ba88e263dbf6af18b1b182c61f83cf93c9d654829df2b05432d6e701d",
+    "workflow_run": {
+      "id": 40607883448,
+      "repository_id": 1434821423,
+      "head_repository_id": 1434821423,
+      "head_branch": "playback-resolution-review",
+      "head_sha": "3f2701a79036792ff16304d86c7e9a7ccea304d7"
+    }
+  }
+]
