@@ -4279,3 +4279,9 @@ Uploaded report artifact metadata:
     }
   }
 ]
+
+Independent archive audit reported: all five archives passed SHA and CRC checks;
+15/15 target content failures; three completed media-load barriers per attempt;
+all new controls/server/service cases passed. API 23 debug attempt 2 additionally
+failed TextOnlyFeedsTest.testMarkAsPlayedList at the 90%-visible click constraint.
+An animation warning accompanied the failure; its cause was not established.

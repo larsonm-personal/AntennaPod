@@ -693,16 +693,18 @@ content failure; the retry policy was unchanged.
 
 API 23 debug attempt 2 also failed the unchanged
 `TextOnlyFeedsTest.testMarkAsPlayedList`: Espresso reported a single-click
-view-constraint failure. That test passed in attempts 1 and 3. Its cause was not
-established, and it is not counted as playback reproduction evidence. Every
-attempt announced 79 app tests; Gradle's finished totals also include the existing
-assumption skips. The transcript preserves the original count messages.
+view-constraint failure. Independent archive review identified the failed
+90%-visible click constraint; the animation warning does not establish its cause.
+That test passed in attempts 1 and 3 and is not counted as playback reproduction
+evidence. Every attempt announced 79 app tests. The transcript preserves the
+distinct starting, finished and assumption-skip messages without reconciling them.
 
 All five report uploads and their non-expired metadata were verified, with no
 capture or report-copy warnings. The transcript records artifact sizes/digests
-and job-log hashes. ZIP contents were not independently opened here; earlier
-archive retrieval from this executor returned HTTP 403. The new API 23 UI failure's
-full report is in `test-report-api-23-debug`, `ci-emulator/attempt-2/`.
+and job-log hashes. Earlier archive retrieval from this executor returned HTTP 403, so a separate
+audit opened all five archives and verified their SHA digests and ZIP CRCs. It
+confirmed three completed setup barriers per attempt, all new controls passing,
+and the single additional UI failure. That failure's full report is in `test-report-api-23-debug`, `ci-emulator/attempt-2/`.
 
 These runs support the corrected setup's repeatability across the tested devices.
 They do not prove that stale-span deletion caused the earlier coherent-B pass,
