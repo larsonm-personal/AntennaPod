@@ -396,3 +396,24 @@ The pressure setup depends on the current cache format/directory; changing cache
 architecture requires reviewing that setup rather than treating failure to fill
 it as an audio-content regression. Sampled checks retain their documented blind
 spots and do not establish accessibility of every possible passage.
+
+## Expiry trace review
+
+The initial expiry case did not print its request list. A diagnostic-only follow-up
+now logs requests after expiry even when the sampled assertion fails. Debug and
+release both made HEAD original, HEAD B and two ranged GET B requests. Neither
+requested A after expiry or received its 403 response. The server self-check
+verifies that 403 is available, but playback did not exercise it. Thus this case
+adds an unavailable-A constraint against future pinning fixes, not a new baseline
+recovery path beyond cached A plus fresh B. Recovery after an encountered expiry
+error remains untested. Both diagnostic reruns retained the A→B→A assertion
+failure with no setup error; APK hashes matched canonical builds.
+
+Discovery-only instrumentation with the exact CI `notAnnotation` selector and
+both the research runner and one acceptance control discovered only the control.
+The research runner is excluded by existing debug and release workflow selectors.
+The original 4c4ffa324 qualification used the committed executable sources; only
+result documentation was finalized after those runs. The subsequent diagnostic
+change was rebuilt and rerun in debug/release. Its evidence is retained under
+`/workspace/antennapod-validation/eviction-review/`. Eviction setup/assertions were
+unchanged and were not redundantly rerun.

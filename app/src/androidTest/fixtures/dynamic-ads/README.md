@@ -147,8 +147,11 @@ The expiry case makes A return 403 for HEAD and GET while the original endpoint
 resolves to B. It restarts the player with partial A still cached, then requires
 played samples and successful seeks. Errors cannot satisfy this recovery case.
 Expiry is an additional synthetic behavior, not established by the live captures.
-This checks restart recovery; automatic re-resolution inside a failing player
-remains separate coverage.
+This checks restart with A unavailable, not recovery from a received expiry
+response. In the measured baseline, restart resolves B without requesting A;
+the failure follows the existing cached-A/fresh-B mechanism. The additional
+constraint challenges a future fix that pins unavailable A. Automatic
+re-resolution after an actual expiry error remains separate coverage.
 
 The older selected-edition seek experiment is now invoked only by
 `ResolvedPlaybackResearchTest#previouslySelectedEditionMatchesLaterSeeks`, which

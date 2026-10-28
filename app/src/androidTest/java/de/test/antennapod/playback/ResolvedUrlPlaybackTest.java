@@ -378,12 +378,18 @@ public class ResolvedUrlPlaybackTest {
     public void expiredResolvedUrlRestartsWithSeekableContent() throws Exception {
         useTaggedFixtures(false);
         MediaItem media = primeCachedEpisode();
+        int beforeExpiry = server.getRequests().size();
         server.expireA();
         server.switchFreshResolutionsToB();
-        taggedAudio = new ResolvedTaggedAudio();
-        playResolved(media, RESUME_MS);
-        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
-        checkFixedSeekTargets();
+        try {
+            taggedAudio = new ResolvedTaggedAudio();
+            playResolved(media, RESUME_MS);
+            checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+            checkFixedSeekTargets();
+        } finally {
+            List<String> requests = server.getRequests();
+            Log.i(TAG, "afterExpiry requests=" + requests.subList(beforeExpiry, requests.size()));
+        }
     }
 
     private void evictPrimedAudioThroughPlayback() throws Exception {
