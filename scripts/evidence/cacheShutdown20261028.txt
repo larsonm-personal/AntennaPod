@@ -4285,3 +4285,11 @@ Independent archive audit reported: all five archives passed SHA and CRC checks;
 all new controls/server/service cases passed. API 23 debug attempt 2 additionally
 failed TextOnlyFeedsTest.testMarkAsPlayedList at the 90%-visible click constraint.
 An animation warning accompanied the failure; its cause was not established.
+
+Final independent audit: 45 barriers after terminal active=[]; 45 audio controls,
+30 service cases and 45 server cases passed without skips. Target observations
+had 43/44 PCM windows, with B GET starting at the verified A-tail end.
+Every attempt retained full Gradle/logcat/status and 25 HTML report files, with
+empty capture/report-copy stderr. Release logcat also contained a nonfatal
+Espresso screenshot-helper NoSuchMethodError for ResolvableFuture.create in the
+existing TextOnlyFeedsTest wait helper; the associated test report passed.

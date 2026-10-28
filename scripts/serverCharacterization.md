@@ -679,7 +679,7 @@ Hosted qualification completed on that same review commit. All 15 attempts
 reached the mixed-content assertion: 30 A windows before the boundary, 9 or 10 B
 windows afterward, and maximum A error 60.0566–60.0892 seconds. Stable A,
 empty-cache B, completed downloads, server checks and service checks passed.
-There were no playback setup or linkage failures. Static analysis, wrapper
+There were no failures in the new playback setup. Static analysis, wrapper
 validation and all three unit/build jobs passed. CI remains red for the intended
 content failure; the retry policy was unchanged.
 
@@ -710,3 +710,16 @@ These runs support the corrected setup's repeatability across the tested devices
 They do not prove that stale-span deletion caused the earlier coherent-B pass,
 or that this synthetic scenario is the user's actual lifecycle. The test remains
 under review; PR #8441 has not been inspected or applied.
+
+The final independent archive audit counted all 45 restart barriers after terminal
+load events with an empty active-task set. All 45 audio-control, 30 service and
+45 server-check cases passed without skips. Each target observation contained
+43 or 44 PCM windows, and the resumed B GET started at the verified A-tail end.
+All 15 attempt directories contained Gradle output, logcat, status and 25 HTML
+report files, with empty capture/report-copy stderr.
+
+Release logcat also contained a nonfatal Espresso screenshot-helper
+`NoSuchMethodError` for `ResolvableFuture.create` in the existing
+`TextOnlyFeedsTest` wait helper. The associated test report passed. This is recorded
+separately from the one UI click failure and the intended playback assertion;
+the existing helper was not modified.
