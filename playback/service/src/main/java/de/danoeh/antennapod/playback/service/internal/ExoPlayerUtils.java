@@ -17,7 +17,6 @@ import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.datasource.cache.CacheDataSource;
 import androidx.media3.datasource.cache.CacheKeyFactory;
-import androidx.media3.datasource.cache.ContentMetadata;
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import de.danoeh.antennapod.net.common.RedirectChecker;
@@ -28,6 +27,7 @@ import androidx.media3.exoplayer.drm.DrmSessionManagerProvider;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.extractor.DefaultExtractorsFactory;
 import androidx.media3.extractor.mp3.Mp3Extractor;
 import de.danoeh.antennapod.net.common.NetworkUtils;
@@ -103,7 +103,13 @@ public class ExoPlayerUtils {
 
     @OptIn(markerClass = UnstableApi.class)
     public static class ApMediaSourceFactory implements MediaSource.Factory {
-        private LoadErrorHandlingPolicy loadErrorHandlingPolicy;
+        private LoadErrorHandlingPolicy loadErrorHandlingPolicy = new DefaultLoadErrorHandlingPolicy() {
+            @Override
+            public long getRetryDelayMsFor(LoadErrorInfo errorInfo) {
+                return ValidatingStreamDataSource.ChangedException.find(errorInfo.exception) == null
+                        ? super.getRetryDelayMsFor(errorInfo) : C.TIME_UNSET;
+            }
+        };
         private DrmSessionManagerProvider drmSessionManagerProvider;
         private final DefaultExtractorsFactory extractorsFactory;
         private final DefaultMediaSourceFactory defaultFactory;
@@ -162,18 +168,24 @@ public class ExoPlayerUtils {
                 httpDataSourceFactory.setDefaultRequestProperties(
                         Collections.singletonMap("Authorization", authHeader));
             }
-            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpDataSourceFactory);
+            String uri = mediaItem.localConfiguration != null
+                    ? mediaItem.localConfiguration.uri.toString() : "";
+            StreamCacheGeneration generation = uri.startsWith("http") ? new StreamCacheGeneration(context, uri) : null;
+            DataSource.Factory httpFactory = generation != null
+                    ? () -> new ValidatingStreamDataSource(httpDataSourceFactory.createDataSource(),
+                            simpleCache, generation) : httpDataSourceFactory;
+            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpFactory);
             ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
             DataSource.Factory resolvingFactory = new ResolvingDataSource.Factory(dataSourceFactory, dataSpec -> {
                 String originalUrl = dataSpec.uri.toString();
                 if (!originalUrl.startsWith("http")) {
                     return dataSpec;
                 }
-                String resolvedUrl = redirectCache.get(originalUrl);
+                Uri cachedUri = dataSpec.key == null ? null
+                        : ValidatingStreamDataSource.getCachedUri(simpleCache.getContentMetadata(dataSpec.key));
+                String resolvedUrl = cachedUri == null ? redirectCache.get(originalUrl) : cachedUri.toString();
                 if (resolvedUrl == null) {
-                    Uri cachedUri = dataSpec.key == null ? null
-                            : ContentMetadata.getRedirectedUri(simpleCache.getContentMetadata(dataSpec.key));
-                    resolvedUrl = cachedUri == null ? RedirectChecker.getFinalUrl(originalUrl) : cachedUri.toString();
+                    resolvedUrl = RedirectChecker.getFinalUrl(originalUrl);
                     redirectCache.putIfAbsent(originalUrl, resolvedUrl);
                     resolvedUrl = redirectCache.get(originalUrl);
                 }
@@ -182,13 +194,11 @@ public class ExoPlayerUtils {
                 }
                 return dataSpec.withUri(Uri.parse(resolvedUrl));
             });
-            String uri = mediaItem.localConfiguration != null
-                    ? mediaItem.localConfiguration.uri.toString() : "";
-            if (uri.startsWith("http")) {
+            if (generation != null) {
                 return new CacheDataSource.Factory()
                         .setCache(simpleCache)
-                        .setCacheKeyFactory(dataSpec -> "resolved-stream-v1:"
-                                + CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec))
+                        .setCacheKeyFactory(dataSpec -> generation.cacheKey(
+                                CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec)))
                         .setUpstreamDataSourceFactory(resolvingFactory);
             }
             return resolvingFactory;
