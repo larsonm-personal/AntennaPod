@@ -23,12 +23,16 @@ import de.danoeh.antennapod.model.feed.FeedMedia;
 import de.danoeh.antennapod.playback.base.MediaItemAdapter;
 import de.danoeh.antennapod.playback.base.RewindAfterPauseUtils;
 import de.danoeh.antennapod.playback.service.Media3PlaybackService;
+import de.danoeh.antennapod.playback.service.internal.StreamCacheGeneration;
 import de.danoeh.antennapod.storage.database.DBReader;
 import de.danoeh.antennapod.storage.database.DBWriter;
 import de.danoeh.antennapod.storage.database.PodDBAdapter;
 import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
 import de.danoeh.antennapod.storage.preferences.UserPreferences;
 import de.test.antennapod.EspressoTestUtils;
+import de.danoeh.antennapod.event.PlayerErrorEvent;
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
 
 import org.apache.commons.io.IOUtils;
 import org.awaitility.Awaitility;
@@ -48,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -63,6 +68,7 @@ public class Media3ServiceRestartTest {
     private volatile long position;
     private volatile long restoredPosition = -1;
     private volatile long restoredAt;
+    private volatile boolean recoveryRejected;
 
     @Before
     public void setUp() throws Exception {
@@ -170,6 +176,103 @@ public class Media3ServiceRestartTest {
                 && restoredAt - pausedAt < RewindAfterPauseUtils.ELAPSED_TIME_FOR_SHORT_REWIND);
         assertEquals("Saved position and normal short-pause rewind", savedPosition
                 - RewindAfterPauseUtils.MINIMUM_REWIND, restoredPosition);
+    }
+
+    @Test
+    public void expiredCachedUrlRecoversThroughFreshServiceSource() throws Exception {
+        startAndPause();
+        String before = generation();
+        int requests = server.getRequests().size();
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        server.resumeResponses();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        awaitRecoveredPosition(113000);
+        assertNotEquals(before, generation());
+        List<String> recovery = server.getRequests();
+        recovery = recovery.subList(requests, recovery.size());
+        assertTrue(recovery.toString(), hasRequest(recovery, "GET A "));
+        assertTrue(recovery.toString(), hasRequest(recovery, "GET B "));
+        assertRecoveredSeeks();
+    }
+
+    @Test
+    public void changedLengthRecoversThroughFreshServiceSource() throws Exception {
+        startAndPause();
+        String before = generation();
+        server.replaceAWithB();
+        server.resumeResponses();
+        onMain(() -> {
+            controller.seekTo(110000);
+            controller.play();
+        });
+        awaitRecoveredPosition(113000);
+        assertNotEquals(before, generation());
+        assertRecoveredSeeks();
+    }
+
+    @Test
+    public void unchangedForbiddenUrlDoesNotRotateCacheGeneration() throws Exception {
+        startAndPause();
+        String before = generation();
+        server.expireA();
+        server.resumeResponses();
+        EventBus.getDefault().register(this);
+        try {
+            onMain(() -> {
+                controller.seekTo(110000);
+                controller.play();
+            });
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> recoveryRejected);
+            assertEquals(before, generation());
+            onMain(() -> assertNotNull(controller.getPlayerError()));
+        } finally {
+            EventBus.getDefault().unregister(this);
+        }
+    }
+
+    @Subscribe
+    public void onRecoveryRejected(PlayerErrorEvent event) {
+        recoveryRejected = true;
+    }
+
+    private boolean hasRequest(List<String> requests, String prefix) {
+        for (String request : requests) {
+            if (request.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String generation() {
+        return new StreamCacheGeneration(context, server.getBaseUrl() + "/resolved-ad/original").token;
+    }
+
+    private void awaitRecoveredPosition(long minimum) {
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            final boolean[] ready = {false};
+            onMain(() -> {
+                position = controller.getCurrentPosition();
+                ready[0] = controller.getPlayerError() == null && controller.getPlaybackState() == Player.STATE_READY
+                        && position >= minimum;
+            });
+            return ready[0];
+        });
+        onMain(() -> assertEquals(String.valueOf(media.getId()), controller.getCurrentMediaItem().mediaId));
+        Log.i("Media3ServiceRestartTest", "recoveredPosition=" + position + " requests=" + server.getRequests());
+    }
+
+    private void assertRecoveredSeeks() {
+        String recovered = generation();
+        for (long target : new long[] {80000, 110000, 75000}) {
+            onMain(() -> controller.seekTo(target));
+            awaitPosition(target + 1500);
+            assertEquals(recovered, generation());
+        }
     }
 
     private void startAndPause() throws Exception {

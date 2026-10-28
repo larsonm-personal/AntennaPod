@@ -1,6 +1,7 @@
 package de.test.antennapod.playback;
 
 import androidx.test.platform.app.InstrumentationRegistry;
+import de.danoeh.antennapod.net.common.RedirectChecker;
 import org.apache.commons.io.IOUtils;
 import org.awaitility.Awaitility;
 import org.junit.After;
@@ -23,6 +24,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 
 public class ResolvedEpisodeServerTest {
     private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
@@ -53,6 +55,19 @@ public class ResolvedEpisodeServerTest {
         if (changed != null) {
             changed.delete();
         }
+    }
+
+    @Test
+    public void strictResolutionRejectsHttpAndTransportFailures() throws Exception {
+        server.switchFreshResolutionsToB();
+        assertEquals(server.getBaseUrl() + "/resolved-ad/B",
+                RedirectChecker.getFinalUrlOrThrow(server.getBaseUrl() + "/resolved-ad/original", null));
+        server.expireA();
+        assertThrows(IOException.class, () -> RedirectChecker.getFinalUrlOrThrow(
+                server.getBaseUrl() + "/resolved-ad/A", null));
+        String unavailable = server.getBaseUrl() + "/resolved-ad/original";
+        server.stop();
+        assertThrows(IOException.class, () -> RedirectChecker.getFinalUrlOrThrow(unavailable, null));
     }
 
     @Test
