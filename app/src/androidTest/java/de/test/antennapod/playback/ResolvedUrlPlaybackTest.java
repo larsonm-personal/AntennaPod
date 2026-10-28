@@ -7,6 +7,7 @@ import android.util.Log;
 import androidx.annotation.OptIn;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.database.StandaloneDatabaseProvider;
 import androidx.media3.datasource.cache.CacheSpan;
@@ -256,7 +257,6 @@ public class ResolvedUrlPlaybackTest {
         assertConsumedContent("synthetic disconnect, stable A", INITIAL_AD_SECONDS);
     }
 
-    @Test
     public void changedVariantRemainsAccessibleAcrossBackwardAndForwardSeeks() throws Exception {
         MediaItem media = primeCachedEpisode();
         server.switchFreshResolutionsToB();
@@ -333,6 +333,10 @@ public class ResolvedUrlPlaybackTest {
         taggedAudio = new ResolvedTaggedAudio();
         playResolved(media, RESUME_MS);
         checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+        checkFixedSeekTargets();
+    }
+
+    private void checkFixedSeekTargets() {
         double[] targets = {80, 110, 75};
         for (double target : targets) {
             int before = taggedAudio.epoch();
@@ -345,6 +349,97 @@ public class ResolvedUrlPlaybackTest {
             seekToMedia(target);
             assertEquals(finalEdition, checkSample(collectTaggedAudio(before, 12, false), 4, target));
         }
+    }
+
+    @Test
+    public void evictedStableEditionRemainsSeekable() throws Exception {
+        useTaggedFixtures(false);
+        MediaItem media = primeCachedEpisode();
+        evictPrimedAudioThroughPlayback();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+        checkFixedSeekTargets();
+    }
+
+    @Test
+    public void evictedEpisodeResolvesToSeekableEdition() throws Exception {
+        useTaggedFixtures(false);
+        MediaItem media = primeCachedEpisode();
+        evictPrimedAudioThroughPlayback();
+        server.switchFreshResolutionsToB();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+        checkFixedSeekTargets();
+    }
+
+    @Test
+    public void expiredResolvedUrlRestartsWithSeekableContent() throws Exception {
+        useTaggedFixtures(false);
+        MediaItem media = primeCachedEpisode();
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        taggedAudio = new ResolvedTaggedAudio();
+        playResolved(media, RESUME_MS);
+        checkRestartSamples(collectTaggedAudio(-1, taggedObservationWindows(), false));
+        checkFixedSeekTargets();
+    }
+
+    private void evictPrimedAudioThroughPlayback() throws Exception {
+        File directory = new File(context.getCacheDir(), "streaming");
+        List<File> primed = cacheFiles(directory);
+        assertFalse("No primed cache files", primed.isEmpty());
+        for (int index = 0; index < 26; index++) {
+            final int episode = index;
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                player = ExoPlayerUtils.buildPlayer(context);
+                observeMediaLoads();
+                player.setMediaItem(MediaItem.fromUri(server.getBaseUrl() + "/resolved-ad/pressure/" + episode));
+                player.prepare();
+            });
+            AtomicBoolean buffered = new AtomicBoolean();
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+                InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                    assertNull("Pressure playback error", player.getPlayerError());
+                    buffered.set(player.getPlaybackState() == Player.STATE_READY
+                            && !player.isLoading() && player.getBufferedPercentage() == 100);
+                });
+                return buffered.get();
+            });
+            cancelLoadingAndWait();
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
+                player.release();
+                player = null;
+                ExoPlayerUtils.releaseCache();
+            });
+            Log.i(TAG, "cache pressure completed episode=" + index);
+        }
+        long bytes = 0;
+        for (File file : cacheFiles(directory)) {
+            bytes += file.length();
+        }
+        assertTrue("Pressure did not fill the real cache: " + bytes, bytes > 95L * 1024 * 1024);
+        assertTrue("Cache exceeded 100 MB: " + bytes, bytes <= 100L * 1024 * 1024);
+        for (File file : primed) {
+            assertFalse("Primed span survived pressure: " + file.getName(), file.exists());
+        }
+        Log.i(TAG, "real cache eviction bytes=" + bytes + " removedPrimedFiles=" + primed.size());
+    }
+
+    private List<File> cacheFiles(File directory) {
+        List<File> result = new ArrayList<>();
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    result.addAll(cacheFiles(file));
+                } else if (file.getName().endsWith(".v3.exo")) {
+                    result.add(file);
+                }
+            }
+        }
+        return result;
     }
 
     @Test

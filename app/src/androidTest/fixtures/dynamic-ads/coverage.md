@@ -357,3 +357,42 @@ Debug/release assembly and focused Checkstyle passed. Installed app/test APK
 hashes matched canonical outputs; no extra retention rules were needed. Terminal
 runner results, per-phase timing, APK hashes and raw logs are retained under
 `/workspace/antennapod-validation/priming-readiness/`. No hosted run was made.
+
+## Complete eviction and expiry increment
+
+Three short cases add stable A after real eviction, fresh B after real eviction,
+and expired A followed by restart and sampled seeking. They share the existing
+fixed targets and replay. Pressure buffers 26 local URLs through production
+players, then verifies original span-file removal and the real 100 MB cache
+limit. Both editions remain immutable; expiry separately makes A return 403.
+No new fixture, cache injection, production edit or content-oracle change is used.
+
+API 30 software-emulator results:
+
+| Run | Passed / total | Failures | Seconds |
+| --- | --- | --- | --- |
+| Debug additions and server controls | 11 / 12 | Expiry: repeated sampled editions | 534.486 |
+| Debug observer/playback controls and expiry repeat | 14 / 17 | Expiry, frozen continuous regression, existing sampled seek case | 333.071 |
+| Release additions and focused controls | 24 / 27 | Same three content assertions | 579.365 |
+
+Both eviction cases passed in debug and release. All four pressure setups
+removed both primed files and retained 100,518,970 bytes (95.86 MB). Expiry failed
+at A→B→A samples in all three executions, not at HTTP or setup checks. Observer,
+HTTP, identical-content and completed-download controls passed. No setup timeout
+or skip occurred. These were bounded focused runs, not the complete suite or CI.
+Debug/release builds and focused Checkstyle passed; installed APK hashes matched
+canonical outputs. Full terminal output, logcat and hashes are under
+`/workspace/antennapod-validation/eviction-expiry/`.
+
+The old selected-edition seek body is preserved, but its @Test entry point moved
+to the CI-excluded `ResolvedPlaybackResearchTest`. The main acceptance class no
+longer discovers it. Its output-replacement and fixed-edition assumptions remain
+research limitations. Frozen regression methods and assertions are unchanged.
+
+The new coverage is complete eviction across multiple episodes and recovery on
+player restart. Partial eviction, one episode larger than the cache, automatic
+expiry recovery within an active player, and process death remain untested.
+The pressure setup depends on the current cache format/directory; changing cache
+architecture requires reviewing that setup rather than treating failure to fill
+it as an audio-content regression. Sampled checks retain their documented blind
+spots and do not establish accessibility of every possible passage.

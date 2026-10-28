@@ -126,6 +126,37 @@ shared-program fixtures remain unchanged. The harmless URL-switch control serves
 the same existing file under A and B and requires successful coherent playback.
 No extra file or generator is needed for identical content.
 
+## Eviction and expired URLs
+
+The eviction cases fill the unchanged production 100 MB LRU cache by preparing
+26 separate local episode URLs through production players. Each serves the same
+existing A file (about 4.17 MB); players buffer it fully without playing minutes
+of filler audio. No spans are inserted or deleted by the test during pressure.
+After the fixed sequence, both original span files must be absent and remaining
+cache files must occupy 95–100 MB. This setup depends on the current Media3 cache
+format and directory, but does not require any particular cache key. A different
+cache architecture would need a separately reviewed setup adapter.
+
+Stable A and fresh B then undergo the same fixed sampled seek targets and replay.
+These are complete eviction across multiple episodes, not partial eviction or a
+single episode larger than the cache. The local transfer cost is about 108 MB per
+case; no larger generated fixture is needed. On the API 30 software emulator,
+pressure takes roughly 1.5–3 minutes per case.
+
+The expiry case makes A return 403 for HEAD and GET while the original endpoint
+resolves to B. It restarts the player with partial A still cached, then requires
+played samples and successful seeks. Errors cannot satisfy this recovery case.
+Expiry is an additional synthetic behavior, not established by the live captures.
+This checks restart recovery; automatic re-resolution inside a failing player
+remains separate coverage.
+
+The older selected-edition seek experiment is now invoked only by
+`ResolvedPlaybackResearchTest#previouslySelectedEditionMatchesLaterSeeks`, which
+is excluded from CI via `IgnoreOnCi` and from the explicit acceptance collection.
+It preserves the original experiment, including its requirement for output
+replacement and its rejection of a later whole-edition switch. Its failure is
+research evidence, not a neutral acceptance requirement.
+
 ## Build and run
 
 Instrumentation builds require Python 3 and FFmpeg with libmp3lame on PATH; no tools

@@ -29,6 +29,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile boolean prefixSent;
     private volatile File replacementA;
     private volatile boolean redirectAGets;
+    private volatile boolean expiredA;
     private volatile int connectionGeneration;
     private volatile int interruptedResponses;
 
@@ -67,6 +68,10 @@ public class ResolvedEpisodeServer extends HTTPBin {
 
     public void replaceAWith(File replacement) {
         replacementA = replacement;
+    }
+
+    public void expireA() {
+        expiredA = true;
     }
 
     public void redirectGetsFromAToB() {
@@ -142,10 +147,13 @@ public class ResolvedEpisodeServer extends HTTPBin {
             response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + (redirectGet ? "B" : resolved));
             return response;
         }
-        if (!name.equals("A") && !name.equals("B")) {
+        if (name.equals("A") && expiredA) {
+            return new Response(Response.Status.FORBIDDEN, "text/plain", "Synthetic expired URL");
+        }
+        if (!name.equals("A") && !name.equals("B") && !name.startsWith("pressure/")) {
             return new Response(Response.Status.NOT_FOUND, "text/plain", "");
         }
-        File file = name.equals("A") ? initial : changed;
+        File file = name.equals("B") ? changed : initial;
         if (name.equals("A") && replacementA != null) {
             file = replacementA;
         }

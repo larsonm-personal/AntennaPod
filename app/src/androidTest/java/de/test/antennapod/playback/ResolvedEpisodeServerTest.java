@@ -56,6 +56,24 @@ public class ResolvedEpisodeServerTest {
     }
 
     @Test
+    public void expiryLeavesFreshResolutionAndPressureRoutesAvailable() throws Exception {
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        for (String method : new String[] {"HEAD", "GET"}) {
+            HttpURLConnection expired = open("A", method, "bytes=100-199");
+            try {
+                assertEquals(403, expired.getResponseCode());
+            } finally {
+                expired.disconnect();
+            }
+            assertRedirect(method, "B");
+        }
+        assertArrayEquals(bytesB, read("B", null, 200));
+        assertArrayEquals(bytesA, read("pressure/0", null, 200));
+        assertArrayEquals(bytesA, read("pressure/1", null, 200));
+    }
+
+    @Test
     public void switchingResolutionDoesNotChangeEitherRepresentation() throws Exception {
         assertRedirect("HEAD", "A");
         assertRedirect("GET", "A");
