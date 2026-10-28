@@ -16,6 +16,8 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.datasource.cache.CacheDataSource;
+import androidx.media3.datasource.cache.CacheKeyFactory;
+import androidx.media3.datasource.cache.ContentMetadata;
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import de.danoeh.antennapod.net.common.RedirectChecker;
@@ -107,7 +109,6 @@ public class ExoPlayerUtils {
         private final DefaultMediaSourceFactory defaultFactory;
         private final Context context;
         private final SimpleCache simpleCache;
-        private final ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
 
         public ApMediaSourceFactory(Context context, SimpleCache simpleCache) {
             super();
@@ -162,6 +163,7 @@ public class ExoPlayerUtils {
                         Collections.singletonMap("Authorization", authHeader));
             }
             DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpDataSourceFactory);
+            ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
             DataSource.Factory resolvingFactory = new ResolvingDataSource.Factory(dataSourceFactory, dataSpec -> {
                 String originalUrl = dataSpec.uri.toString();
                 if (!originalUrl.startsWith("http")) {
@@ -169,8 +171,11 @@ public class ExoPlayerUtils {
                 }
                 String resolvedUrl = redirectCache.get(originalUrl);
                 if (resolvedUrl == null) {
-                    resolvedUrl = RedirectChecker.getFinalUrl(originalUrl);
+                    Uri cachedUri = dataSpec.key == null ? null
+                            : ContentMetadata.getRedirectedUri(simpleCache.getContentMetadata(dataSpec.key));
+                    resolvedUrl = cachedUri == null ? RedirectChecker.getFinalUrl(originalUrl) : cachedUri.toString();
                     redirectCache.putIfAbsent(originalUrl, resolvedUrl);
+                    resolvedUrl = redirectCache.get(originalUrl);
                 }
                 if (resolvedUrl.equals(originalUrl)) {
                     return dataSpec;
@@ -182,6 +187,8 @@ public class ExoPlayerUtils {
             if (uri.startsWith("http")) {
                 return new CacheDataSource.Factory()
                         .setCache(simpleCache)
+                        .setCacheKeyFactory(dataSpec -> "resolved-stream-v1:"
+                                + CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec))
                         .setUpstreamDataSourceFactory(resolvingFactory);
             }
             return resolvingFactory;
