@@ -31,6 +31,11 @@ inherit it. A raw-socket test checks both requests on the same connection.
 The first production player seeks to 70 seconds, after the synthetic segment, then
 consumes 17 seconds before cancellation. The recreated player resumes at 87 seconds.
 This avoids playing a minute of setup audio while retaining real cache population.
+The added cases give setup 30 seconds to reach the server prefix and a complete
+actually consumed PCM window. Only then does the unchanged 30-second observation
+phase begin, still requiring consumption through 87 seconds. The prefix alone can
+come from the initial header request before the seek load is ready. The frozen
+restart regression retains its original setup waits and continuous assertion.
 Before cache recreation, the test pauses, deselects audio, and waits for its active
 media loads to finish or cancel. Player release alone can return before the cache
 writer closes.

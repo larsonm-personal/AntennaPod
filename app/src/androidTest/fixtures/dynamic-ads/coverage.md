@@ -334,3 +334,26 @@ These release results do not explain or erase the debug setup failures. Terminal
 runner output and environment diagnostics are preserved under
 `/workspace/antennapod-validation/sampled-segments/` and the `sampled-*` logs under
 `/workspace/antennapod-validation/tagged-correction/`. No hosted run was made.
+
+## Priming readiness correction
+
+The server prefix flag can be set by the initial header request, before the seek
+load produces audio. The added cases now wait for that flag and a complete
+actually consumed PCM window in the existing 30-second setup phase, then start
+the unchanged 30-second observation phase through 87 seconds. Throttling, content
+assertions and the frozen restart regression's waits are unchanged. This corrects
+the timer start; it does not establish why software-emulator output sometimes lags.
+
+Three separate debug repeats of the previously timing-sensitive same-length case
+passed. First-window readiness took 11.8–15.3 seconds and observation took
+18.8–22.8 seconds. Identical-content and reconnect controls also passed. The final
+35-case suites passed 31 cases each: debug in 798.771 seconds, release in 703.432
+seconds. Both retained the same four content failures listed above, with no setup
+timeout or skip. Full-suite first-window delays were 2.3–10.6 seconds in debug
+and 2.2–4.7 seconds in release; observation took 18.7–20.6 and 19.5–19.7 seconds,
+respectively. Historical failures remain preserved.
+
+Debug/release assembly and focused Checkstyle passed. Installed app/test APK
+hashes matched canonical outputs; no extra retention rules were needed. Terminal
+runner results, per-phase timing, APK hashes and raw logs are retained under
+`/workspace/antennapod-validation/priming-readiness/`. No hosted run was made.

@@ -445,9 +445,22 @@ public class ResolvedUrlPlaybackTest {
     }
 
     private void awaitPrimedAudio() {
+        long started = System.nanoTime();
+        long[] firstConsumedWindow = {0};
+        long ready = 0;
         long[] nextReportMs = {0};
         try {
-            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(server::hasSentPrefix);
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+                PcmOutput output = sink;
+                boolean consumed = output != null && !output.consumedWindows().isEmpty();
+                if (consumed && firstConsumedWindow[0] == 0) {
+                    firstConsumedWindow[0] = System.nanoTime();
+                }
+                return server.hasSentPrefix() && consumed;
+            });
+            ready = System.nanoTime();
+            Log.i(TAG, "priming firstConsumedWindowMs=" + (firstConsumedWindow[0] - started) / 1000000
+                    + " readinessMs=" + (ready - started) / 1000000);
             Awaitility.await().atMost(30, TimeUnit.SECONDS).conditionEvaluationListener(condition -> {
                 if (condition.getElapsedTimeInMS() >= nextReportMs[0]) {
                     nextReportMs[0] += 5000;
@@ -455,6 +468,8 @@ public class ResolvedUrlPlaybackTest {
                 }
             }).until(() -> sink != null && sink.consumedUs >= RESUME_MS * 1000);
         } finally {
+            Log.i(TAG, "priming observationMs=" + (ready == 0 ? -1 : (System.nanoTime() - ready) / 1000000)
+                    + " totalMs=" + (System.nanoTime() - started) / 1000000);
             logPrimingState();
         }
     }
