@@ -1,4 +1,4 @@
-package de.test.antennapod.playback;
+package de.test.antennapod.playback.hazards;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.apache.commons.io.IOUtils;

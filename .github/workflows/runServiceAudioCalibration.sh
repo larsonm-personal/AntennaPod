@@ -3,7 +3,7 @@ set -uo pipefail
 
 variant="${1:?debug or release}"
 folder="${2:-app/build/service-audio-calibration}"
-classes="de.test.antennapod.playback.ServiceAudioObserverTest,de.test.antennapod.playback.ResolvedTaggedAudioTest,de.test.antennapod.playback.ResolvedEpisodeServerTest"
+package="de.test.antennapod.playback.hazards"
 mkdir -p "$folder"
 repetition="${3:-1}"
 logcatPid=
@@ -13,7 +13,7 @@ mkdir -p "$output"
 adb logcat -c > "$output/logcat-clear.txt" 2>&1
 adb logcat -b all -v threadtime > "$output/logcat.txt" 2> "$output/logcat-error.txt" &
 logcatPid=$!
-timeout 1200s adb shell am instrument -w -r -e class "$classes" \
+timeout 1200s adb shell am instrument -w -r -e package "$package" \
     de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner \
     > "$output/runner.txt" 2>&1
 status=$?

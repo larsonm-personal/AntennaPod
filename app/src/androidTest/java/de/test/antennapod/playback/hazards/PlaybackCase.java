@@ -1,7 +1,6 @@
-package de.test.antennapod.playback;
+package de.test.antennapod.playback.hazards;
 
 import android.media.AudioFormat;
-import android.os.SystemClock;
 import android.util.Log;
 
 import androidx.annotation.OptIn;
@@ -28,7 +27,6 @@ import de.danoeh.antennapod.storage.database.PodDBAdapter;
 import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 import org.junit.After;
-import org.junit.Test;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -46,9 +44,9 @@ import static org.junit.Assert.assertTrue;
 
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
-public class ServiceAudioObserverTest {
-    private final ServicePlaybackFixture app = new ServicePlaybackFixture();
-    private final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
+public abstract class PlaybackCase {
+    final ServicePlaybackFixture app = new ServicePlaybackFixture();
+    final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
     private final List<PlayerMessage> messages = new ArrayList<>();
     private boolean initialized;
     private ExoPlayer observedPlayer;
@@ -67,106 +65,11 @@ public class ServiceAudioObserverTest {
         }
     }
 
-    @Test
-    public void pausedPreparationDoesNotCountQueuedAudio() throws Exception {
-        start(false);
-        awaitReady();
-        SystemClock.sleep(2000);
-        assertTrue("Paused preparation played audio", audio.heard().isEmpty());
-        sample(() -> app.controller.play(), 0, 80);
-    }
-
-    @Test
-    public void ordinarySeeksExposeKnownProgramPassages() throws Exception {
-        start(false);
-        sample(() -> app.controller.play(), 0, 80);
-        for (int target : new int[] {110, 75, 80}) {
-            seekAndSample(target);
-        }
-    }
-
-    @Test
-    public void completeEpisodeReplacementExposesBothEditions() throws Exception {
-        start(false);
-        sample(() -> app.controller.play(), 0, 80);
-        FeedMedia second = addEpisode("B");
-        select(second, 80);
-        sample(() -> app.controller.play(), 1, 80);
-    }
-
-    @Test
-    public void identicalBytesAtDifferentUrlsStayObservable() throws Exception {
-        start(true);
-        sample(() -> app.controller.play(), 0, 80);
-        FeedMedia second = addEpisode("B");
-        select(second, 80);
-        sample(() -> app.controller.play(), 0, 80);
-    }
-
-    @Test
-    public void freshResolutionKeepsNamedPassagesReachableThroughServiceRestart() throws Exception {
-        start(false, 70, true);
-        sample(() -> app.controller.play(), 0, 70);
-        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
-            List<ResolvedTaggedAudio.Heard> heard = audio.heard();
-            return app.server.hasSentPrefix() && !heard.isEmpty()
-                    && heard.get(heard.size() - 1).program >= 25;
-        });
-        app.stopService();
-        app.server.switchFreshResolutionsToB();
-        app.server.resumeResponses();
-        app.connect();
-        int first = audio.heard().size();
-        app.onMain(() -> app.controller.play());
-        sampledContent(first, false);
-        for (int replay = 0; replay < 2; replay++) {
-            for (int program : new int[] {75, 105, 90}) {
-                boolean reached = reaches(program);
-                if (replay == 1) {
-                    assertTrue("Program passage " + program + " unavailable on the fixed replay", reached);
-                }
-            }
-        }
-    }
-
-    @Test
-    public void originalEditionKeepsNamedPassagesReachable() throws Exception {
-        start(false);
-        sample(() -> app.controller.play(), 0, 80);
-        for (int program : new int[] {75, 105, 90}) {
-            assertTrue("Original edition passage " + program, reaches(program));
-        }
-    }
-
-    @Test
-    public void replacementEditionKeepsNamedPassagesReachable() throws Exception {
-        start(false);
-        select(addEpisode("B"), 80);
-        sample(() -> app.controller.play(), 1, 80);
-        for (int program : new int[] {75, 105, 90}) {
-            assertTrue("Replacement edition passage " + program, reaches(program));
-        }
-    }
-
-    @Test
-    public void passageRecognitionAllowsReplacementButRejectsMissingContent() {
-        List<ResolvedTaggedAudio.Heard> windows = new ArrayList<>();
-        for (int index = 0; index < 4; index++) {
-            double band = index % 2 == 0 ? 500 : 3500;
-            windows.add(new ResolvedTaggedAudio.Heard(new double[] {0.125,
-                    band + (75 + index * 0.25) * 12.5}, index));
-        }
-        assertTrue(matchesPassage(windows, 75));
-        windows.set(2, new ResolvedTaggedAudio.Heard(new double[] {0.125, 500 + 15 * 12.5}, 2));
-        assertFalse(matchesPassage(windows, 75));
-        assertFalse(matchesPassage(Collections.emptyList(), 75));
-    }
-
-    private void start(boolean identical) throws Exception {
+    void start(boolean identical) throws Exception {
         start(identical, 80, false);
     }
 
-    private void start(boolean identical, int position, boolean partial) throws Exception {
+    void start(boolean identical, int position, boolean partial) throws Exception {
         initialized = true;
         app.setUp("tagged-a.mp3", identical ? "tagged-a.mp3" : "tagged-b.mp3");
         if (!partial) {
@@ -179,7 +82,7 @@ public class ServiceAudioObserverTest {
         select(app.media, position);
     }
 
-    private void select(FeedMedia media, int position) {
+    void select(FeedMedia media, int position) {
         app.onMain(() -> {
             app.controller.pause();
             app.controller.setMediaItem(MediaItemAdapter.fromMediaIdStub(media.getId()));
@@ -189,7 +92,7 @@ public class ServiceAudioObserverTest {
         app.onMain(() -> app.controller.seekTo(position * 1000L));
     }
 
-    private FeedMedia addEpisode(String route) {
+    FeedMedia addEpisode(String route) {
         Feed feed = new Feed(app.server.getBaseUrl() + "/second-feed", null, "Synthetic second feed", null, null);
         FeedItem item = new FeedItem(0, "Synthetic second episode", "second", null, new Date(),
                 FeedItem.UNPLAYED, feed);
@@ -206,7 +109,7 @@ public class ServiceAudioObserverTest {
         return media;
     }
 
-    private void awaitReady() {
+    void awaitReady() {
         AtomicBoolean ready = new AtomicBoolean();
         try {
             Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
@@ -223,7 +126,7 @@ public class ServiceAudioObserverTest {
         }
     }
 
-    private void seekAndSample(int target) {
+    void seekAndSample(int target) {
         seekStart = -1;
         requestedSeek = target * 1000L;
         app.onMain(() -> app.controller.seekTo(target * 1000L));
@@ -231,13 +134,13 @@ public class ServiceAudioObserverTest {
         measure(seekStart, 0, target);
     }
 
-    private void sample(Runnable action, int edition, int target) {
+    void sample(Runnable action, int edition, int target) {
         int first = audio.heard().size();
         app.onMain(action);
         measure(first, edition, target);
     }
 
-    private boolean reaches(int program) {
+    boolean reaches(int program) {
         for (double ad : new double[] {2, 2 + 2299 * 1152.0 / 44100}) {
             long target = Math.round((program + ad) * 1000);
             AtomicLong duration = new AtomicLong();
@@ -267,7 +170,7 @@ public class ServiceAudioObserverTest {
         return false;
     }
 
-    private static boolean matchesPassage(List<ResolvedTaggedAudio.Heard> segment, int program) {
+    static boolean matchesPassage(List<ResolvedTaggedAudio.Heard> segment, int program) {
         if (segment.size() != 4) {
             return false;
         }
@@ -281,7 +184,7 @@ public class ServiceAudioObserverTest {
         return true;
     }
 
-    private List<ResolvedTaggedAudio.Heard> sampledContent(int first, boolean allowUnavailable) {
+    List<ResolvedTaggedAudio.Heard> sampledContent(int first, boolean allowUnavailable) {
         try {
             Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> audio.heard().size() >= first + 12);
         } catch (ConditionTimeoutException unavailable) {
@@ -303,7 +206,7 @@ public class ServiceAudioObserverTest {
         return history.subList(first + 8, first + 12);
     }
 
-    private void measure(int first, int edition, int target) {
+    void measure(int first, int edition, int target) {
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
             app.onMain(() -> assertNull(app.controller.getPlayerError()));
             return audio.heard().size() >= first + 12;
@@ -322,7 +225,7 @@ public class ServiceAudioObserverTest {
         }
     }
 
-    private void logState(String stage) {
+    void logState(String stage) {
         app.onMain(() -> {
             for (Player player : new Player[] {app.controller, observedPlayer}) {
                 Log.i("ServiceAudioObserver", stage + " observer="

@@ -1,4 +1,4 @@
-package de.test.antennapod.playback;
+package de.test.antennapod.playback.hazards;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;

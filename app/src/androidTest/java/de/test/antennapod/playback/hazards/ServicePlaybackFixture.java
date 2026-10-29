@@ -1,4 +1,4 @@
-package de.test.antennapod.playback;
+package de.test.antennapod.playback.hazards;
 
 import android.app.ActivityManager;
 import android.content.ComponentName;
