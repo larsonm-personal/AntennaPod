@@ -1,4 +1,4 @@
-name: Service content regression
+name: Playback hazards
 
 on:
   pull_request:
@@ -6,15 +6,14 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  calibration:
-    name: Service audio API 30 ${{ matrix.variant }} repetition ${{ matrix.repetition }}
+  build:
+    name: Build hazard APKs ${{ matrix.variant }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         variant: [debug, release]
-        repetition: [1, 2, 3]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -32,17 +31,44 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 ffmpeg
           ffmpeg -hide_banner -encoders | grep libmp3lame
-          bash -n .github/workflows/runServiceAudioCalibration.sh .github/workflows/testServiceAudioCalibration.sh
-          bash .github/workflows/testServiceAudioCalibration.sh
+          bash -n .github/workflows/runPlaybackHazards.sh .github/workflows/testPlaybackHazards.sh
+          bash .github/workflows/testPlaybackHazards.sh
       - name: Temporary release keystore
         if: matrix.variant == 'release'
         run: keytool -genkeypair -dname "cn=AntennaPod CI, o=AntennaPod, c=DE" -alias alias -keystore app/keystore -storepass password -keypass password -keyalg RSA -keysize 2048 -validity 10000
-      - name: Build calibration APKs
+      - name: Build and identify APKs
         run: |
           variant="${{ matrix.variant }}"
           ./gradlew :app:assemblePlay${variant^} :app:assemblePlay${variant^}AndroidTest -PtestBuildType="$variant"
-          sha256sum app/build/outputs/apk/play/$variant/*.apk app/build/outputs/apk/androidTest/play/$variant/*.apk
-          ./gradlew --stop
+          sha256sum app/build/outputs/apk/play/$variant/*.apk app/build/outputs/apk/androidTest/play/$variant/*.apk > app/build/outputs/apk/hashes.txt
+          cat app/build/outputs/apk/hashes.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playback-hazard-apks-${{ matrix.variant }}
+          path: |
+            app/build/outputs/apk/play/${{ matrix.variant }}/*.apk
+            app/build/outputs/apk/androidTest/play/${{ matrix.variant }}/*.apk
+            app/build/outputs/apk/hashes.txt
+
+  hazards:
+    name: Hazards ${{ matrix.group }} API 30 ${{ matrix.variant }} repetition ${{ matrix.repetition }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [controls, resolution, mutation, head-get, transport, expiry, cache]
+        variant: [debug, release]
+        repetition: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: playback-hazard-apks-${{ matrix.variant }}
+          path: app/build/outputs/apk
+      - name: Verify APK identity
+        run: sha256sum -c app/build/outputs/apk/hashes.txt
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -60,9 +86,9 @@ jobs:
           script: |
             adb install app/build/outputs/apk/play/${{ matrix.variant }}/app-play-${{ matrix.variant }}.apk
             adb install app/build/outputs/apk/androidTest/play/${{ matrix.variant }}/app-play-${{ matrix.variant }}-androidTest.apk
-            bash .github/workflows/runServiceAudioCalibration.sh ${{ matrix.variant }} app/build/service-audio-calibration ${{ matrix.repetition }}
+            bash .github/workflows/runPlaybackHazards.sh ${{ matrix.variant }} app/build/playback-hazards ${{ matrix.repetition }} ${{ matrix.group }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
-          name: service-audio-${{ matrix.variant }}-${{ matrix.repetition }}
-          path: app/build/service-audio-calibration/
+          name: playback-hazards-${{ matrix.group }}-${{ matrix.variant }}-${{ matrix.repetition }}
+          path: app/build/playback-hazards/

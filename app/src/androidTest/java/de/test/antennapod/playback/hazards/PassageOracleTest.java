@@ -1,12 +1,12 @@
 package de.test.antennapod.playback.hazards;
 
-
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
 import androidx.test.filters.LargeTest;
 
-
 import org.junit.Test;
+
+import de.test.antennapod.IgnoreOnCi;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,6 +17,7 @@ import static org.junit.Assert.assertTrue;
 
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
+@IgnoreOnCi
 public class PassageOracleTest extends PlaybackCase {
     @Test
     public void passageRecognitionAllowsReplacementButRejectsMissingContent() {

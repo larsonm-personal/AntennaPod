@@ -27,7 +27,7 @@ the identical program bytes found in the capture. The service restart and respon
 throttling are explicit test staging, not claims about the user's actual trigger.
 
 `ResolvedEpisodeServer` shows the scenario in order: resolve A, wait for the test's
-signal, resolve B. Throttling is separate and never manufactures EOF. Protocol
+signal, resolve B. Throttling is separate. Only the explicitly named interruption case disconnects an active response. Protocol
 controls cover redirects, immutable endpoints, ranges, EOF and resumed responses.
 Healthy playback controls cover both editions, identical bytes at different URLs,
 paused/queued audio, seeks and complete episode replacement.
@@ -46,17 +46,24 @@ Use `-PfixturePython=/path/to/python3` if necessary.
 ./gradlew :app:assembleDebug :app:assemblePlayDebugAndroidTest
 adb install -r app/build/outputs/apk/play/debug/app-play-debug.apk
 adb install -r app/build/outputs/apk/androidTest/play/debug/app-play-debug-androidTest.apk
-bash .github/workflows/runServiceAudioCalibration.sh debug
+bash .github/workflows/runPlaybackHazards.sh debug app/build/playback-hazards 1 controls
 ```
 
-The focused selection has 21 cases. CI runs three independent repetitions per build
-variant with no retries. Runner output and logcat are retained in
-`service-audio-<variant>-<repetition>` artifacts; failure excerpts are capped below
-200 lines. GitHub requires sign-in to download workflow artifacts.
+The expanded selection has 44 cases, grouped as `controls`, `resolution`, `mutation`,
+`head-get`, `transport`, `expiry` and `cache`. Run each group with the command above,
+replacing `controls`. CI schedules each group in three independent jobs per build
+variant, without retries. These classes are excluded from the older general-suite
+retry runner; the dedicated runner checks the exact group test count. Runner output
+and full logcat are retained in `playback-hazards-<group>-<variant>-<repetition>`
+artifacts; inline failure excerpts remain below 200 lines per job. GitHub requires
+sign-in to download workflow artifacts.
 
-Before extraction, the [unfixed suite](https://github.com/larsonm-personal/AntennaPod/actions/runs/40826830606)
+See [hazards.md](hazards.md) for scenario provenance, contracts and limits. This
+expansion is undergoing qualification; its new cases are not yet claimed reliable.
+
+Before expansion, the [unfixed service suite](https://github.com/larsonm-personal/AntennaPod/actions/runs/40826830606)
 failed the passage-75 replay assertion in all six jobs while its 108 control
 executions passed. The [unchanged production-fix comparison](https://github.com/larsonm-personal/AntennaPod/actions/runs/40832198700)
-passed all 114 executions. Local traces showed coherent A reuse, not expired-URL
-recovery. Same-URL mutation, expiry recovery and bandwidth limits remain separate
-coverage gaps. This branch contains no production fix.
+passed all 114 executions. Those results apply to the earlier measured-resolution
+case, not to the new robustness cases. Local traces showed coherent A reuse, not
+expired-URL recovery. This branch contains no production fix.

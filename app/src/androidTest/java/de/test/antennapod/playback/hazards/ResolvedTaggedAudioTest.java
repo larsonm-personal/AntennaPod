@@ -6,6 +6,8 @@ import androidx.media3.exoplayer.audio.AudioOutput;
 
 import org.junit.Test;
 
+import de.test.antennapod.IgnoreOnCi;
+
 import java.lang.reflect.Proxy;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -16,6 +18,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @OptIn(markerClass = UnstableApi.class)
+@IgnoreOnCi
 public class ResolvedTaggedAudioTest {
     @Test
     public void partialWritesMatchWholeWritesAndExcludeQueuedAudio() throws Exception {

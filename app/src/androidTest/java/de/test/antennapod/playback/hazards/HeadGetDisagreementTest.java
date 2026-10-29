@@ -6,8 +6,11 @@ import androidx.test.filters.LargeTest;
 
 import org.junit.Test;
 
+import de.test.antennapod.IgnoreOnCi;
+
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
+@IgnoreOnCi
 public class HeadGetDisagreementTest extends PlaybackCase {
     @Test
     public void getSelectedContentKeepsPassagesReachable() throws Exception {

@@ -35,3 +35,11 @@ behaviors and small groups of service cases. Record all failures, including
 healthy-control failures. Fixed CI repetitions run as separate jobs, retain full
 logs and cap inline diagnostics at 200 lines. The production fix stays separate;
 no test is changed to accommodate it.
+
+The warm-cache budget is declared before qualification: three stable warm restarts
+may transfer at most one fully buffered cold preparation's body bytes in total.
+This includes metadata-related reads, excludes HTTP headers, and does not require
+particular request counts. A failure is a data-use finding, not proof of its cause.
+Eviction setup inspects current Media3 span files only to verify real LRU pressure;
+the content oracle uses no cache keys or filenames. It covers complete eviction
+across other episodes, not a single oversized episode or every cache backend.

@@ -1,6 +1,5 @@
 package de.test.antennapod.playback.hazards;
 
-
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
 import androidx.test.filters.LargeTest;
@@ -10,6 +9,8 @@ import de.danoeh.antennapod.model.feed.FeedMedia;
 import org.awaitility.Awaitility;
 import org.junit.Test;
 
+import de.test.antennapod.IgnoreOnCi;
+
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -17,6 +18,7 @@ import static org.junit.Assert.assertTrue;
 
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
+@IgnoreOnCi
 public class ResolutionChangeTest extends PlaybackCase {
     @Test
     public void freshResolutionKeepsNamedPassagesReachableThroughServiceRestart() throws Exception {

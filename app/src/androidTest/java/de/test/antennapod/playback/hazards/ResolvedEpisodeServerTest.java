@@ -7,9 +7,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import de.test.antennapod.IgnoreOnCi;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.Socket;
@@ -21,7 +24,9 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
+@IgnoreOnCi
 public class ResolvedEpisodeServerTest {
     private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
     private final byte[] bytesA = new byte[6000];
@@ -96,6 +101,84 @@ public class ResolvedEpisodeServerTest {
             head.disconnect();
             get.disconnect();
         }
+    }
+
+    @Test
+    public void expiryRejectsAWhileFreshBRemainsAvailable() throws Exception {
+        server.expireA();
+        server.switchFreshResolutionsToB();
+        HttpURLConnection response = open("A", "GET", null);
+        try {
+            assertEquals(403, response.getResponseCode());
+            assertEquals(1, server.getExpiredResponses());
+            assertRedirect("HEAD", "B");
+            assertArrayEquals(bytesB, read("B", null, 200));
+        } finally {
+            response.disconnect();
+        }
+    }
+
+    @Test
+    public void ignoredRangeReturnsTheWholeResource() throws Exception {
+        server.ignoreRanges();
+        HttpURLConnection response = open("A", "GET", "bytes=100-199");
+        try {
+            assertEquals(200, response.getResponseCode());
+            assertNull(response.getHeaderField("Content-Range"));
+            assertEquals(bytesA.length, response.getContentLength());
+            assertArrayEquals(bytesA, IOUtils.toByteArray(response.getInputStream()));
+        } finally {
+            response.disconnect();
+        }
+    }
+
+    @Test
+    public void bodyCounterMeasuresBytesRatherThanRequests() throws Exception {
+        HttpURLConnection head = open("A", "HEAD", null);
+        try {
+            assertEquals(200, head.getResponseCode());
+            assertEquals(0, server.getBodyBytes());
+        } finally {
+            head.disconnect();
+        }
+        assertArrayEquals(bytesA, read("A", null, 200));
+        assertEquals(bytesA.length, server.getBodyBytes());
+    }
+
+    @Test
+    public void mutationCanKeepTheResourceLength() throws Exception {
+        byte[] equalLength = Arrays.copyOf(bytesB, bytesA.length);
+        try (FileOutputStream output = new FileOutputStream(changed)) {
+            output.write(equalLength);
+        }
+        server.replaceAWithB();
+        assertArrayEquals(equalLength, read("A", null, 200));
+        assertEquals(initial.length(), changed.length());
+    }
+
+    @Test
+    public void disconnectedResponseDoesNotPoisonTheNextRequest() throws Exception {
+        server.throttleResponsesAfter(1024);
+        HttpURLConnection response = open("A", "GET", null);
+        int received = 1024;
+        try (InputStream input = response.getInputStream()) {
+            IOUtils.readFully(input, new byte[1024]);
+            Awaitility.await().atMost(5, TimeUnit.SECONDS).until(server::hasSentPrefix);
+            server.disconnectActiveResponses();
+            server.resumeResponses();
+            try {
+                while (input.read() != -1) {
+                    received++;
+                }
+            } catch (IOException interrupted) {
+                assertTrue("No synthetic interruption", server.getInterruptedResponses() > 0);
+            }
+            assertTrue("Response was not interrupted", received < bytesA.length);
+            assertTrue("No synthetic interruption", server.getInterruptedResponses() > 0);
+        } finally {
+            response.disconnect();
+        }
+        assertArrayEquals(bytesA, read("A", null, 200));
     }
 
     @Test

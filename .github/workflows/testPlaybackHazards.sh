@@ -27,7 +27,7 @@ elif [ "$MODE" = long-failure ]; then
 elif [ "$MODE" = missing ]; then
     echo 'INSTRUMENTATION_FAILED: unavailable'
 else
-    echo 'OK (27 tests)'
+    echo "OK (${EXPECTED_TESTS:-27} tests)"
     echo 'INSTRUMENTATION_CODE: -1'
 fi
 STUB
@@ -37,7 +37,7 @@ for MODE in pass fail-first missing command-error long-failure; do
     export MODE
     echo 0 > "$COUNTER"
     status=0
-    bash .github/workflows/runServiceAudioCalibration.sh debug "$folder/$MODE" > "$folder/$MODE.txt" || status=$?
+    bash .github/workflows/runPlaybackHazards.sh debug "$folder/$MODE" > "$folder/$MODE.txt" || status=$?
     test "$(cat "$COUNTER")" = 1
     test "$(wc -l < "$folder/$MODE.txt")" -le 200
     if [ "$MODE" = long-failure ]; then grep -q "observer=controller" "$folder/$MODE.txt"; fi
@@ -50,4 +50,14 @@ for MODE in pass fail-first missing command-error long-failure; do
         fi
     done
 done
-echo 'Calibration runner controls passed'
+export MODE=pass EXPECTED_TESTS=3
+bash .github/workflows/runPlaybackHazards.sh debug "$folder/group" 1 mutation > "$folder/group.txt"
+grep -q 'all 3 tests' "$folder/group.txt"
+export MODE=fail-first EXPECTED_TESTS=27
+echo 0 > "$COUNTER"
+if bash .github/workflows/runPlaybackHazards.sh debug "$folder/retained" 1 > "$folder/first.txt"; then exit 1; fi
+export MODE=pass
+bash .github/workflows/runPlaybackHazards.sh debug "$folder/retained" 2 > "$folder/second.txt"
+grep -q 'FAILURES!!!' "$folder/retained/repetition-1/runner.txt"
+grep -q 'OK (27 tests)' "$folder/retained/repetition-2/runner.txt"
+echo 'Hazard runner controls passed'

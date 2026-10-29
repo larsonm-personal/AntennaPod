@@ -57,7 +57,9 @@ public abstract class PlaybackCase {
     public void tearDown() throws Exception {
         try {
             if (initialized) {
-                Log.i("ServiceAudioObserver", "requests=" + app.server.getRequests());
+                for (String request : app.server.getRequests()) {
+                    Log.i("ServiceAudioObserver", "request=" + request);
+                }
                 app.tearDown();
             }
         } finally {
@@ -87,6 +89,11 @@ public abstract class PlaybackCase {
     }
 
     void primeCachedEpisode(boolean equalLength) throws Exception {
+        primePlayback(equalLength);
+        app.stopService();
+    }
+
+    void primePlayback(boolean equalLength) throws Exception {
         start(equalLength ? "tagged-equal-length.mp3" : "tagged-b.mp3", 70, true);
         sample(() -> app.controller.play(), 0, 70);
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
@@ -94,7 +101,6 @@ public abstract class PlaybackCase {
             return app.server.hasSentPrefix() && !heard.isEmpty()
                     && heard.get(heard.size() - 1).program >= 25;
         });
-        app.stopService();
     }
 
     void restartAndCheckPassages() throws Exception {
@@ -142,6 +148,18 @@ public abstract class PlaybackCase {
         }
         assertTrue(media.getId() > 0);
         return media;
+    }
+
+    void awaitFullyBuffered() {
+        AtomicBoolean buffered = new AtomicBoolean();
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            app.onMain(() -> {
+                assertNull(app.controller.getPlayerError());
+                buffered.set(app.controller.getPlaybackState() == Player.STATE_READY
+                        && !app.controller.isLoading() && app.controller.getBufferedPercentage() == 100);
+            });
+            return buffered.get();
+        });
     }
 
     void awaitReady() {
