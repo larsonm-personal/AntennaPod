@@ -1,0 +1,227 @@
+package de.test.antennapod.playback;
+
+import android.media.AudioFormat;
+import android.os.SystemClock;
+import android.util.Log;
+
+import androidx.annotation.OptIn;
+import androidx.media3.common.C;
+import androidx.media3.common.Player;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.PlayerMessage;
+import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.audio.AudioOutput;
+import androidx.media3.exoplayer.audio.AudioOutputProvider;
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutput;
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
+import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider;
+import androidx.test.filters.LargeTest;
+
+import de.danoeh.antennapod.model.feed.Feed;
+import de.danoeh.antennapod.model.feed.FeedItem;
+import de.danoeh.antennapod.model.feed.FeedMedia;
+import de.danoeh.antennapod.playback.base.MediaItemAdapter;
+import de.danoeh.antennapod.playback.service.Media3PlaybackService;
+import de.danoeh.antennapod.storage.database.PodDBAdapter;
+
+import org.awaitility.Awaitility;
+import org.junit.After;
+import org.junit.Test;
+
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+@LargeTest
+@OptIn(markerClass = UnstableApi.class)
+public class ServiceAudioObserverTest {
+    private final Media3ServiceRestartTest app = new Media3ServiceRestartTest();
+    private final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
+    private final List<PlayerMessage> messages = new ArrayList<>();
+    private boolean initialized;
+    private volatile long requestedSeek = -1;
+    private volatile int seekStart = -1;
+
+    @After
+    public void tearDown() throws Exception {
+        try {
+            if (initialized) {
+                app.tearDown();
+            }
+        } finally {
+            Media3PlaybackService.setPlayerObserverForTests(null);
+        }
+    }
+
+    @Test
+    public void pausedPreparationDoesNotCountQueuedAudio() throws Exception {
+        start(false);
+        awaitReady();
+        SystemClock.sleep(2000);
+        assertTrue("Paused preparation played audio", audio.heard().isEmpty());
+        sample(() -> app.controller.play(), 0, 80);
+    }
+
+    @Test
+    public void ordinarySeeksExposeKnownProgramPassages() throws Exception {
+        start(false);
+        sample(() -> app.controller.play(), 0, 80);
+        for (int target : new int[] {110, 75, 80}) {
+            seekAndSample(target);
+        }
+    }
+
+    @Test
+    public void completeEpisodeReplacementExposesBothEditions() throws Exception {
+        start(false);
+        sample(() -> app.controller.play(), 0, 80);
+        FeedMedia second = addEpisode("B");
+        select(second, 80);
+        sample(() -> app.controller.play(), 1, 80);
+    }
+
+    @Test
+    public void identicalBytesAtDifferentUrlsStayObservable() throws Exception {
+        start(true);
+        sample(() -> app.controller.play(), 0, 80);
+        FeedMedia second = addEpisode("B");
+        select(second, 80);
+        sample(() -> app.controller.play(), 0, 80);
+    }
+
+    private void start(boolean identical) throws Exception {
+        initialized = true;
+        app.setUp("tagged-a.mp3", identical ? "tagged-a.mp3" : "tagged-b.mp3");
+        app.server.resumeResponses();
+        Media3PlaybackService.setPlayerObserverForTests(this::observe);
+        app.connect();
+        assertEquals(1, messages.size());
+        messages.get(0).blockUntilDelivered(5000);
+        select(app.media, 80);
+    }
+
+    private void select(FeedMedia media, int position) {
+        app.onMain(() -> {
+            app.controller.pause();
+            app.controller.setMediaItem(MediaItemAdapter.fromMediaIdStub(media.getId()));
+            app.controller.prepare();
+        });
+        awaitReady();
+        app.onMain(() -> app.controller.seekTo(position * 1000L));
+    }
+
+    private FeedMedia addEpisode(String route) {
+        Feed feed = new Feed(app.server.getBaseUrl() + "/second-feed", null, "Synthetic second feed", null, null);
+        FeedItem item = new FeedItem(0, "Synthetic second episode", "second", null, new Date(),
+                FeedItem.UNPLAYED, feed);
+        FeedMedia media = new FeedMedia(item, app.server.getBaseUrl() + "/resolved-ad/" + route, 0, "audio/mpeg");
+        item.setMedia(media);
+        feed.setItems(Collections.singletonList(item));
+        PodDBAdapter adapter = PodDBAdapter.getInstance().open();
+        try {
+            adapter.setCompleteFeed(feed);
+        } finally {
+            adapter.close();
+        }
+        assertTrue(media.getId() > 0);
+        return media;
+    }
+
+    private void awaitReady() {
+        AtomicBoolean ready = new AtomicBoolean();
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            app.onMain(() -> {
+                assertNull(app.controller.getPlayerError());
+                assertFalse(app.controller.getPlayWhenReady());
+                ready.set(app.controller.getPlaybackState() == Player.STATE_READY
+                        && app.controller.getBufferedPosition() > app.controller.getCurrentPosition() + 1000);
+            });
+            return ready.get();
+        });
+    }
+
+    private void seekAndSample(int target) {
+        seekStart = -1;
+        requestedSeek = target * 1000L;
+        app.onMain(() -> app.controller.seekTo(target * 1000L));
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> seekStart >= 0);
+        measure(seekStart, 0, target);
+    }
+
+    private void sample(Runnable action, int edition, int target) {
+        int first = audio.heard().size();
+        app.onMain(action);
+        measure(first, edition, target);
+    }
+
+    private void measure(int first, int edition, int target) {
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            app.onMain(() -> assertNull(app.controller.getPlayerError()));
+            return audio.heard().size() >= first + 12;
+        });
+        List<ResolvedTaggedAudio.Heard> history = audio.heard();
+        for (int index = first; index < history.size(); index++) {
+            ResolvedTaggedAudio.Heard window = history.get(index);
+            Log.i("ServiceAudioObserver", "sample=" + index + " epoch=" + window.epoch + " edition="
+                    + window.edition + " program=" + window.program + " output=" + window.outputSeconds);
+        }
+        double program = target - 2 - (edition == 0 ? 2299 * 1152.0 / 44100 : 0);
+        for (ResolvedTaggedAudio.Heard window : ResolvedTaggedAudio.segment(history, first + 8, 0.25)) {
+            assertEquals("Known episode edition", edition, window.edition);
+            assertTrue("Expected program passage " + program + " but heard " + window.program,
+                    window.program >= program && window.program <= program + 6);
+        }
+    }
+
+    private void observe(ExoPlayer player) {
+        player.addListener((Player.Listener) Proxy.newProxyInstance(Player.Listener.class.getClassLoader(),
+                new Class<?>[] {Player.Listener.class}, (listener, method, arguments) -> {
+                    switch (method.getName()) {
+                        case "onPositionDiscontinuity":
+                            if (arguments.length == 3 && (int) arguments[2] == Player.DISCONTINUITY_REASON_SEEK
+                                    && requestedSeek >= 0
+                                    && ((Player.PositionInfo) arguments[1]).positionMs == requestedSeek) {
+                                requestedSeek = -1;
+                                player.createMessage((type, payload) -> seekStart = audio.heard().size()).send();
+                            }
+                            return null;
+                        case "hashCode":
+                            return System.identityHashCode(listener);
+                        case "equals":
+                            return listener == arguments[0];
+                        case "toString":
+                            return "ServiceSeekObserver";
+                        default:
+                            return null;
+                    }
+                }));
+        AudioOutputProvider provider = new ForwardingAudioOutputProvider(
+                new AudioTrackAudioOutputProvider.Builder(app.context).build()) {
+            @Override
+            public AudioOutput getAudioOutput(OutputConfig config) throws InitializationException {
+                assertEquals(C.ENCODING_PCM_16BIT, config.encoding);
+                assertEquals(AudioFormat.CHANNEL_OUT_MONO, config.channelMask);
+                assertFalse(config.isOffload);
+                AudioTrackAudioOutput output = (AudioTrackAudioOutput) super.getAudioOutput(config);
+                return audio.wrap(output, () -> output.getAudioTrack().getPlaybackHeadPosition() & 0xffffffffL);
+            }
+        };
+        for (int index = 0; index < player.getRendererCount(); index++) {
+            Renderer renderer = player.getRenderer(index);
+            if (renderer.getTrackType() == C.TRACK_TYPE_AUDIO) {
+                messages.add(player.createMessage(renderer).setType(Renderer.MSG_SET_AUDIO_OUTPUT_PROVIDER)
+                        .setPayload(provider).send());
+            }
+        }
+    }
+}
