@@ -26,6 +26,8 @@ if [ "$status" -ne 0 ] || ! grep -q '^OK (19 tests)' "$output/runner.txt" \
         || ! grep -q '^INSTRUMENTATION_CODE: -1' "$output/runner.txt"; then
     printf 'FAILED: %s repetition %s (command status %s)\n' "$variant" "$repetition" "$status"
     tail -n 40 "$output/runner.txt"
+    grep -E 'ServiceAudioObserver.*(observer=|programTarget=|unavailable state=|requests=)' \
+        "$output/logcat.txt" | tail -n 140 || true
     exit 1
 else
     printf 'PASSED: %s repetition %s, all 19 tests\n' "$variant" "$repetition"

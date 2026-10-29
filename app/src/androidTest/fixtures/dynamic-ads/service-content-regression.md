@@ -68,3 +68,13 @@ coordinates 17.065–17.815 seconds. That alone is valid for coherent A; its alt
 timestamp is 137.056 seconds. Here the alternative produced a source error, and the
 fixed replay recovered neither candidate. This demonstrates failure of the bounded
 passage-recovery plan, not absence of the passage at every conceivable timestamp.
+
+## Hosted qualification is incomplete
+
+Run 40821480410 at `82ec629bb` stopped all six restart cases at the duration
+precondition, before the intended recovery assertion. Debug repetition 2 also timed
+out preparing the replacement episode; release repetition 1 timed out in the
+identical-content control. These are harness/readiness failures, not qualified
+content results. The next diagnostic snapshot logs controller and player state
+without changing assertions, targets, tolerances or deadlines, and prints a bounded
+excerpt beside the full CI artifact. The production-fix comparison remains paused.

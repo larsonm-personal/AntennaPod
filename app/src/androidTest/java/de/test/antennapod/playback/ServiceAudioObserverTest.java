@@ -51,6 +51,7 @@ public class ServiceAudioObserverTest {
     private final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
     private final List<PlayerMessage> messages = new ArrayList<>();
     private boolean initialized;
+    private ExoPlayer observedPlayer;
     private volatile long requestedSeek = -1;
     private volatile int seekStart = -1;
 
@@ -207,15 +208,20 @@ public class ServiceAudioObserverTest {
 
     private void awaitReady() {
         AtomicBoolean ready = new AtomicBoolean();
-        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
-            app.onMain(() -> {
-                assertNull(app.controller.getPlayerError());
-                assertFalse(app.controller.getPlayWhenReady());
-                ready.set(app.controller.getPlaybackState() == Player.STATE_READY
-                        && app.controller.getBufferedPosition() > app.controller.getCurrentPosition() + 1000);
+        try {
+            Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+                app.onMain(() -> {
+                    assertNull(app.controller.getPlayerError());
+                    assertFalse(app.controller.getPlayWhenReady());
+                    ready.set(app.controller.getPlaybackState() == Player.STATE_READY
+                            && app.controller.getBufferedPosition() > app.controller.getCurrentPosition() + 1000);
+                });
+                return ready.get();
             });
-            return ready.get();
-        });
+        } catch (ConditionTimeoutException timeout) {
+            logState("readiness timeout");
+            throw timeout;
+        }
     }
 
     private void seekAndSample(int target) {
@@ -237,6 +243,7 @@ public class ServiceAudioObserverTest {
             long target = Math.round((program + ad) * 1000);
             AtomicLong duration = new AtomicLong();
             app.onMain(() -> duration.set(app.controller.getDuration()));
+            logState("passage=" + program + " candidate=" + target + " readDuration=" + duration.get());
             assertTrue("Unknown episode duration", duration.get() > 0);
             Log.i("ServiceAudioObserver", "programTarget=" + program + " seek=" + target
                     + " duration=" + duration.get());
@@ -313,7 +320,22 @@ public class ServiceAudioObserverTest {
         }
     }
 
+    private void logState(String stage) {
+        app.onMain(() -> {
+            for (Player player : new Player[] {app.controller, observedPlayer}) {
+                Log.i("ServiceAudioObserver", stage + " observer="
+                        + (player == app.controller ? "controller" : "player")
+                        + " item=" + (player.getCurrentMediaItem() == null ? "none"
+                        : player.getCurrentMediaItem().mediaId) + " state=" + player.getPlaybackState()
+                        + " position=" + player.getCurrentPosition() + " buffered=" + player.getBufferedPosition()
+                        + " duration=" + player.getDuration() + " loading=" + player.isLoading()
+                        + " playWhenReady=" + player.getPlayWhenReady() + " error=" + player.getPlayerError());
+            }
+        });
+    }
+
     private void observe(ExoPlayer player) {
+        observedPlayer = player;
         player.addListener((Player.Listener) Proxy.newProxyInstance(Player.Listener.class.getClassLoader(),
                 new Class<?>[] {Player.Listener.class}, (listener, method, arguments) -> {
                     switch (method.getName()) {

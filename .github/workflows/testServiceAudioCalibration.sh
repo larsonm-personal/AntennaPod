@@ -6,7 +6,11 @@ mkdir -p "$folder/bin"
 cat > "$folder/bin/adb" <<'STUB'
 #!/bin/bash
 if [ "$1" = logcat ]; then
-    echo 'Synthetic logcat evidence'
+    if [ "$MODE" = long-failure ]; then
+        for line in $(seq 1 500); do echo "ServiceAudioObserver observer=controller synthetic=$line"; done
+    else
+        echo 'Synthetic logcat evidence'
+    fi
     exit 0
 fi
 number=$(cat "$COUNTER")
@@ -36,6 +40,7 @@ for MODE in pass fail-first missing command-error long-failure; do
     bash .github/workflows/runServiceAudioCalibration.sh debug "$folder/$MODE" > "$folder/$MODE.txt" || status=$?
     test "$(cat "$COUNTER")" = 1
     test "$(wc -l < "$folder/$MODE.txt")" -le 200
+    if [ "$MODE" = long-failure ]; then grep -q "observer=controller" "$folder/$MODE.txt"; fi
     if [ "$MODE" = pass ]; then test "$status" = 0; else test "$status" = 1; fi
     for repetition in 1; do
         test -s "$folder/$MODE/repetition-$repetition/runner.txt"
