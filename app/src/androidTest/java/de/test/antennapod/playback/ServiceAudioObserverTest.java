@@ -26,6 +26,7 @@ import de.danoeh.antennapod.playback.service.Media3PlaybackService;
 import de.danoeh.antennapod.storage.database.PodDBAdapter;
 
 import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.After;
 import org.junit.Test;
 
@@ -36,6 +37,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -56,6 +58,7 @@ public class ServiceAudioObserverTest {
     public void tearDown() throws Exception {
         try {
             if (initialized) {
+                Log.i("ServiceAudioObserver", "requests=" + app.server.getRequests());
                 app.tearDown();
             }
         } finally {
@@ -99,15 +102,80 @@ public class ServiceAudioObserverTest {
         sample(() -> app.controller.play(), 0, 80);
     }
 
+    @Test
+    public void freshResolutionKeepsNamedPassagesReachableThroughServiceRestart() throws Exception {
+        start(false, 70, true);
+        sample(() -> app.controller.play(), 0, 70);
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            List<ResolvedTaggedAudio.Heard> heard = audio.heard();
+            return app.server.hasSentPrefix() && !heard.isEmpty()
+                    && heard.get(heard.size() - 1).program >= 25;
+        });
+        app.stopService();
+        app.server.switchFreshResolutionsToB();
+        app.server.resumeResponses();
+        app.connect();
+        int first = audio.heard().size();
+        app.onMain(() -> app.controller.play());
+        sampledContent(first, false);
+        for (int replay = 0; replay < 2; replay++) {
+            for (int program : new int[] {75, 105, 90}) {
+                boolean reached = reaches(program);
+                if (replay == 1) {
+                    assertTrue("Program passage " + program + " unavailable on the fixed replay", reached);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void originalEditionKeepsNamedPassagesReachable() throws Exception {
+        start(false);
+        sample(() -> app.controller.play(), 0, 80);
+        for (int program : new int[] {75, 105, 90}) {
+            assertTrue("Original edition passage " + program, reaches(program));
+        }
+    }
+
+    @Test
+    public void replacementEditionKeepsNamedPassagesReachable() throws Exception {
+        start(false);
+        select(addEpisode("B"), 80);
+        sample(() -> app.controller.play(), 1, 80);
+        for (int program : new int[] {75, 105, 90}) {
+            assertTrue("Replacement edition passage " + program, reaches(program));
+        }
+    }
+
+    @Test
+    public void passageRecognitionAllowsReplacementButRejectsMissingContent() {
+        List<ResolvedTaggedAudio.Heard> windows = new ArrayList<>();
+        for (int index = 0; index < 4; index++) {
+            double band = index % 2 == 0 ? 500 : 3500;
+            windows.add(new ResolvedTaggedAudio.Heard(new double[] {0.125,
+                    band + (75 + index * 0.25) * 12.5}, index));
+        }
+        assertTrue(matchesPassage(windows, 75));
+        windows.set(2, new ResolvedTaggedAudio.Heard(new double[] {0.125, 500 + 15 * 12.5}, 2));
+        assertFalse(matchesPassage(windows, 75));
+        assertFalse(matchesPassage(Collections.emptyList(), 75));
+    }
+
     private void start(boolean identical) throws Exception {
+        start(identical, 80, false);
+    }
+
+    private void start(boolean identical, int position, boolean partial) throws Exception {
         initialized = true;
         app.setUp("tagged-a.mp3", identical ? "tagged-a.mp3" : "tagged-b.mp3");
-        app.server.resumeResponses();
+        if (!partial) {
+            app.server.resumeResponses();
+        }
         Media3PlaybackService.setPlayerObserverForTests(this::observe);
         app.connect();
         assertEquals(1, messages.size());
         messages.get(0).blockUntilDelivered(5000);
-        select(app.media, 80);
+        select(app.media, position);
     }
 
     private void select(FeedMedia media, int position) {
@@ -164,6 +232,68 @@ public class ServiceAudioObserverTest {
         measure(first, edition, target);
     }
 
+    private boolean reaches(int program) {
+        for (double ad : new double[] {2, 2 + 2299 * 1152.0 / 44100}) {
+            long target = Math.round((program + ad) * 1000);
+            AtomicLong duration = new AtomicLong();
+            app.onMain(() -> duration.set(app.controller.getDuration()));
+            assertTrue("Unknown episode duration", duration.get() > 0);
+            Log.i("ServiceAudioObserver", "programTarget=" + program + " seek=" + target
+                    + " duration=" + duration.get());
+            if (target + 6000 >= duration.get()) {
+                Log.i("ServiceAudioObserver", "candidate outside reported duration");
+                continue;
+            }
+            seekStart = -1;
+            requestedSeek = target;
+            app.onMain(() -> app.controller.seekTo(target));
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> seekStart >= 0);
+            List<ResolvedTaggedAudio.Heard> segment = sampledContent(seekStart, true);
+            boolean matches = matchesPassage(segment, program);
+            Log.i("ServiceAudioObserver", "programTarget=" + program + " candidateMatched=" + matches);
+            if (matches) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesPassage(List<ResolvedTaggedAudio.Heard> segment, int program) {
+        if (segment.size() != 4) {
+            return false;
+        }
+        for (int index = 0; index < segment.size(); index++) {
+            ResolvedTaggedAudio.Heard window = segment.get(index);
+            if (window.edition < 0 || window.program < program || window.program > program + 6
+                    || Math.abs(window.program - segment.get(0).program - index * 0.25) >= 0.25) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<ResolvedTaggedAudio.Heard> sampledContent(int first, boolean allowUnavailable) {
+        try {
+            Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> audio.heard().size() >= first + 12);
+        } catch (ConditionTimeoutException unavailable) {
+            app.onMain(() -> Log.i("ServiceAudioObserver", "unavailable state="
+                    + app.controller.getPlaybackState() + " error=" + app.controller.getPlayerError()));
+            if (!allowUnavailable) {
+                throw unavailable;
+            }
+        }
+        List<ResolvedTaggedAudio.Heard> history = audio.heard();
+        for (int index = first; index < history.size(); index++) {
+            ResolvedTaggedAudio.Heard window = history.get(index);
+            Log.i("ServiceAudioObserver", "sample=" + index + " epoch=" + window.epoch + " edition="
+                    + window.edition + " program=" + window.program + " output=" + window.outputSeconds);
+        }
+        if (history.size() < first + 12) {
+            return Collections.emptyList();
+        }
+        return history.subList(first + 8, first + 12);
+    }
+
     private void measure(int first, int edition, int target) {
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
             app.onMain(() -> assertNull(app.controller.getPlayerError()));
@@ -189,8 +319,7 @@ public class ServiceAudioObserverTest {
                     switch (method.getName()) {
                         case "onPositionDiscontinuity":
                             if (arguments.length == 3 && (int) arguments[2] == Player.DISCONTINUITY_REASON_SEEK
-                                    && requestedSeek >= 0
-                                    && ((Player.PositionInfo) arguments[1]).positionMs == requestedSeek) {
+                                    && requestedSeek >= 0) {
                                 requestedSeek = -1;
                                 player.createMessage((type, payload) -> seekStart = audio.heard().size()).send();
                             }

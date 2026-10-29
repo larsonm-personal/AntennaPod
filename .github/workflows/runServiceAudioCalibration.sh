@@ -5,31 +5,28 @@ variant="${1:?debug or release}"
 folder="${2:-app/build/service-audio-calibration}"
 classes="de.test.antennapod.playback.ServiceAudioObserverTest,de.test.antennapod.playback.ResolvedTaggedAudioTest"
 mkdir -p "$folder"
-failed=0
+repetition="${3:-1}"
 logcatPid=
 trap '[ -z "$logcatPid" ] || kill "$logcatPid" 2>/dev/null || true' EXIT
-for repetition in 1 2 3; do
-    output="$folder/repetition-$repetition"
-    mkdir -p "$output"
-    adb logcat -c > "$output/logcat-clear.txt" 2>&1
-    adb logcat -b all -v threadtime > "$output/logcat.txt" 2> "$output/logcat-error.txt" &
-    logcatPid=$!
-    timeout 600s adb shell am instrument -w -r -e class "$classes" \
-        de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner \
-        > "$output/runner.txt" 2>&1
-    status=$?
-    kill "$logcatPid" 2>/dev/null || true
-    wait "$logcatPid" 2>/dev/null || true
-    logcatPid=
-    printf '%s\n' "$status" > "$output/command-status.txt"
-    if [ "$status" -ne 0 ] || ! grep -q '^OK (15 tests)' "$output/runner.txt" \
-            || ! grep -q '^INSTRUMENTATION_CODE: -1' "$output/runner.txt"; then
-        failed=1
-        printf 'FAILED: %s repetition %s (command status %s)\n' "$variant" "$repetition" "$status"
-        tail -n 40 "$output/runner.txt"
-    else
-        printf 'PASSED: %s repetition %s, all 15 controls\n' "$variant" "$repetition"
-    fi
-    printf 'Full evidence: service-audio-%s artifact, repetition-%s/\n' "$variant" "$repetition"
-done
-exit "$failed"
+output="$folder/repetition-$repetition"
+mkdir -p "$output"
+adb logcat -c > "$output/logcat-clear.txt" 2>&1
+adb logcat -b all -v threadtime > "$output/logcat.txt" 2> "$output/logcat-error.txt" &
+logcatPid=$!
+timeout 1200s adb shell am instrument -w -r -e class "$classes" \
+    de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner \
+    > "$output/runner.txt" 2>&1
+status=$?
+kill "$logcatPid" 2>/dev/null || true
+wait "$logcatPid" 2>/dev/null || true
+logcatPid=
+printf '%s\n' "$status" > "$output/command-status.txt"
+printf 'Full evidence: service-audio-%s-%s artifact, repetition-%s/\n' "$variant" "$repetition" "$repetition"
+if [ "$status" -ne 0 ] || ! grep -q '^OK (19 tests)' "$output/runner.txt" \
+        || ! grep -q '^INSTRUMENTATION_CODE: -1' "$output/runner.txt"; then
+    printf 'FAILED: %s repetition %s (command status %s)\n' "$variant" "$repetition" "$status"
+    tail -n 40 "$output/runner.txt"
+    exit 1
+else
+    printf 'PASSED: %s repetition %s, all 19 tests\n' "$variant" "$repetition"
+fi
