@@ -207,7 +207,7 @@ public class Media3ServiceRestartTest {
         });
     }
 
-    private void stopService() throws Exception {
+    void stopService() throws Exception {
         if (controller != null) {
             onMain(() -> controller.pause());
             Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() ->
