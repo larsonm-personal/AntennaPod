@@ -45,12 +45,14 @@ import de.danoeh.antennapod.model.feed.FeedMedia;
 import de.danoeh.antennapod.model.feed.FeedPreferences;
 import de.danoeh.antennapod.model.feed.VolumeAdaptionSetting;
 import de.danoeh.antennapod.net.common.NetworkUtils;
+import de.danoeh.antennapod.net.common.RedirectChecker;
 import de.danoeh.antennapod.net.sync.serviceinterface.SynchronizationQueue;
 import de.danoeh.antennapod.playback.base.MediaItemAdapter;
 import de.danoeh.antennapod.playback.base.PlayerStatus;
 import de.danoeh.antennapod.playback.base.RewindAfterPauseUtils;
 import de.danoeh.antennapod.playback.cast.CastPlayerWrapper;
 import de.danoeh.antennapod.playback.service.internal.ExoPlayerUtils;
+import de.danoeh.antennapod.playback.service.internal.ValidatingStreamDataSource;
 import de.danoeh.antennapod.playback.service.internal.MediaLibrarySessionCallback;
 import de.danoeh.antennapod.playback.service.internal.PlayableUtils;
 import de.danoeh.antennapod.playback.service.internal.SkipUtils;
@@ -105,6 +107,11 @@ public class Media3PlaybackService extends MediaLibraryService {
     private Disposable mediaLoaderDisposable;
     private Disposable positionObserverDisposable;
     private Disposable queueLoaderDisposable;
+    private Disposable streamRecoveryDisposable;
+    private boolean streamRecoveryUsed;
+    private boolean replacingStream;
+    private long streamRecoveryAttempt;
+    private boolean destroyed;
     private long lastPositionSaveTime = 0;
     private String playedMediaId = null;
     private int playbackStartPosition = -1;
@@ -160,6 +167,12 @@ public class Media3PlaybackService extends MediaLibraryService {
             @Override
             public void setShuffleModeEnabled(boolean shuffleModeEnabled) {
                 // Ignored, some car stereos set this via Bluetooth
+            }
+
+            @Override
+            public void stop() {
+                invalidateStreamRecovery();
+                super.stop();
             }
 
             @Override
@@ -319,6 +332,17 @@ public class Media3PlaybackService extends MediaLibraryService {
         @Override
         @NonNull
         @UnstableApi
+        public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onSetMediaItems(
+                @NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller,
+                @NonNull List<MediaItem> items, int startIndex, long startPositionMs) {
+            invalidateStreamRecovery();
+            streamRecoveryUsed = true;
+            return super.onSetMediaItems(session, controller, items, startIndex, startPositionMs);
+        }
+
+        @Override
+        @NonNull
+        @UnstableApi
         public ListenableFuture<SessionResult> onCustomCommand(@NonNull MediaSession session,
                 @NonNull MediaSession.ControllerInfo controller,
                 @NonNull SessionCommand customCommand,
@@ -456,6 +480,10 @@ public class Media3PlaybackService extends MediaLibraryService {
 
         @Override
         public void onMediaItemTransition(@Nullable MediaItem mediaItem, int reason) {
+            if (!replacingStream) {
+                streamRecoveryUsed = false;
+                invalidateStreamRecovery();
+            }
             if (mediaItem == null) {
                 if (currentPlayable != null
                         && CastPlayerWrapper.hasPlaybackJustFinished(Media3PlaybackService.this)) {
@@ -470,12 +498,77 @@ public class Media3PlaybackService extends MediaLibraryService {
 
         @Override
         public void onPlayerError(@NonNull PlaybackException error) {
-            PlaybackService.isRunning = false;
-            EventBus.getDefault().post(new PlayerErrorEvent(
-                    ExoPlayerUtils.translateErrorReason(error, Media3PlaybackService.this)));
-            EventBus.getDefault().post(new PlayerStatusEvent());
+            if (!recoverStream(error)) {
+                reportPlaybackError(error);
+            }
         }
     };
+
+    private void invalidateStreamRecovery() {
+        streamRecoveryAttempt++;
+        if (streamRecoveryDisposable != null) {
+            streamRecoveryDisposable.dispose();
+            streamRecoveryDisposable = null;
+        }
+    }
+
+    private boolean recoverStream(PlaybackException error) {
+        ValidatingStreamDataSource.ChangedException change = ValidatingStreamDataSource.ChangedException.find(error);
+        MediaItem item = player.getCurrentMediaItem();
+        if (change == null || item == null || item.localConfiguration == null || isCasting()
+                || streamRecoveryUsed
+                || !item.localConfiguration.uri.toString().equals(change.generation.enclosure)) {
+            return false;
+        }
+        streamRecoveryUsed = true;
+        long attempt = ++streamRecoveryAttempt;
+        String authorization = item.requestMetadata.extras == null ? null
+                : item.requestMetadata.extras.getString(MediaItemAdapter.KEY_AUTHORIZATION_HEADER);
+        streamRecoveryDisposable = Single.fromCallable(() -> {
+            if (change.needsResolution && change.failedUri.equals(
+                    RedirectChecker.getFinalUrlOrThrow(change.generation.enclosure, authorization))) {
+                return false;
+            }
+            change.generation.invalidate();
+            return true;
+        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe(recover -> {
+            if (destroyed || attempt != streamRecoveryAttempt) {
+                return;
+            }
+            streamRecoveryDisposable = null;
+            MediaItem currentItem = player.getCurrentMediaItem();
+            if (currentItem == null) {
+                return;
+            }
+            if (!recover) {
+                reportPlaybackError(error);
+                return;
+            }
+            long position = player.getCurrentPosition();
+            final boolean playWhenReady = player.getPlayWhenReady();
+            replacingStream = true;
+            try {
+                player.setMediaItem(currentItem, position);
+            } finally {
+                replacingStream = false;
+            }
+            player.prepare();
+            player.setPlayWhenReady(playWhenReady);
+        }, failure -> {
+            if (destroyed || attempt != streamRecoveryAttempt) {
+                return;
+            }
+            streamRecoveryDisposable = null;
+            reportPlaybackError(error);
+        });
+        return true;
+    }
+
+    private void reportPlaybackError(PlaybackException error) {
+        PlaybackService.isRunning = false;
+        EventBus.getDefault().post(new PlayerErrorEvent(ExoPlayerUtils.translateErrorReason(error, this)));
+        EventBus.getDefault().post(new PlayerStatusEvent());
+    }
 
     @Nullable
     @Override
@@ -486,6 +579,8 @@ public class Media3PlaybackService extends MediaLibraryService {
     @UnstableApi
     @Override
     public void onDestroy() {
+        destroyed = true;
+        invalidateStreamRecovery();
         PlaybackService.isRunning = false;
         cancelPositionObserver();
         if (sleepTimer != null) {

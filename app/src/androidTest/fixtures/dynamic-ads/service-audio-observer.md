@@ -47,11 +47,12 @@ adb install -r app/build/outputs/apk/androidTest/play/debug/app-play-debug-andro
 bash .github/workflows/runServiceAudioCalibration.sh debug
 ```
 
-The runner executes all fifteen controls three times, always retaining every repetition.
-Any failure, incomplete runner result or unexpected test count fails qualification, even
-if subsequent repetitions pass. The separate CI workflow uses API 30 with KVM required,
-in debug and release. Full runner output and logcat are downloadable as
-`service-audio-debug` and `service-audio-release`; GitHub requires sign-in for downloads.
+The current child branch adds the named-passage regression and its two controls,
+described in `service-content-regression.md`. The runner executes nineteen tests once.
+CI schedules three independent jobs per build variant, with KVM required on API 30.
+Any failure, incomplete runner result or unexpected test count fails its job; there
+is no retry. Full runner output and logcat are downloadable as
+`service-audio-<variant>-<repetition>`; GitHub requires sign-in for downloads.
 Existing regression CI remains separate and includes known failing reproduction cases.
 
 These controls must pass consistently before this path is used for neutral acceptance
