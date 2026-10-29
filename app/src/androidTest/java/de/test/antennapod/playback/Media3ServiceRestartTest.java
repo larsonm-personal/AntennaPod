@@ -54,26 +54,30 @@ import static org.junit.Assert.assertTrue;
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 public class Media3ServiceRestartTest {
-    private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
-    private Context context;
-    private MediaController controller;
+    final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
+    Context context;
+    MediaController controller;
     private File initial;
     private File changed;
-    private FeedMedia media;
+    FeedMedia media;
     private volatile long position;
     private volatile long restoredPosition = -1;
     private volatile long restoredAt;
 
     @Before
     public void setUp() throws Exception {
+        setUp("resolved-a.mp3", "resolved-b.mp3");
+    }
+
+    void setUp(String first, String second) throws Exception {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         stopService();
         deleteCache();
         EspressoTestUtils.clearPreferences();
         EspressoTestUtils.clearDatabase();
         UserPreferences.setAllowMobileStreaming(true);
-        initial = copyAsset("resolved-a.mp3");
-        changed = copyAsset("resolved-b.mp3");
+        initial = copyAsset(first);
+        changed = copyAsset(second);
         server.start(initial, changed);
         server.throttleResponsesAfter(512000);
         Feed feed = new Feed(server.getBaseUrl() + "/feed", null, "Synthetic subscription", null, null);
@@ -187,7 +191,7 @@ public class Media3ServiceRestartTest {
         });
     }
 
-    private void connect() throws Exception {
+    void connect() throws Exception {
         SessionToken token = new SessionToken(context, new ComponentName(context, Media3PlaybackService.class));
         controller = new MediaController.Builder(context, token).setApplicationLooper(Looper.getMainLooper())
                 .buildAsync().get(30, TimeUnit.SECONDS);
@@ -253,7 +257,7 @@ public class Media3ServiceRestartTest {
         return file;
     }
 
-    private void onMain(Runnable action) {
+    void onMain(Runnable action) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(action);
     }
 }
