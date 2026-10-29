@@ -28,7 +28,10 @@ they do not establish an ability to detect arbitrary equal-length server changes
 
 Not included: process death, actual Wi-Fi/cellular handoff, partial eviction, or
 one episode larger than the cache. The measured evidence does not establish
-same-URL mutation, expiry, disconnection, or exact ad placement.
+same-URL mutation, expiry, disconnection, or exact ad placement. The
+[research survey](https://github.com/larsonm-personal/AntennaPod/blob/playback-skip-repro-readiness/scripts/podcast-streaming-survey.md)
+records other apps’ length checks, join validation and streaming/download reports;
+those motivate robustness cases without making them measured incident facts.
 
 Qualification starts with the reorganized unchanged PR5 cases, then adds server
 behaviors and small groups of service cases. Record all failures, including
@@ -43,3 +46,7 @@ particular request counts. A failure is a data-use finding, not proof of its cau
 Eviction setup inspects current Media3 span files only to verify real LRU pressure;
 the content oracle uses no cache keys or filenames. It covers complete eviction
 across other episodes, not a single oversized episode or every cache backend.
+
+Cache-pressure setup uses the current app’s paused prebuffering. A different
+buffering policy or cache backend may need a different preparation step; a setup
+incompatibility is not evidence of missing program content.

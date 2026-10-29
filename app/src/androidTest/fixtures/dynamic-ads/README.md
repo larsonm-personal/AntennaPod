@@ -18,6 +18,9 @@ position. Flushes and replacement preserve played evidence and discard queued-on
 samples. These are sampled passage checks, not proof of continuous splice quality
 or accessibility at every possible timestamp.
 The observer is calibrated for these mono PCM16 fixtures at normal playback speed.
+Full-buffer preparation reads the service player directly: a paused controller can
+retain an older buffering snapshot. This preparation check is separate from the
+consumed-audio oracle.
 
 The observed server had stable A/B URLs and a shorter B. Two sampled regions of B
 matched later encoded audio in A, displaced by 2,299 MP3 frames (60.055510204 seconds).

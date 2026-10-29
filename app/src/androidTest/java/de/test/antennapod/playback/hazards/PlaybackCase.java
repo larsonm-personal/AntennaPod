@@ -152,14 +152,19 @@ public abstract class PlaybackCase {
 
     void awaitFullyBuffered() {
         AtomicBoolean buffered = new AtomicBoolean();
-        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
-            app.onMain(() -> {
-                assertNull(app.controller.getPlayerError());
-                buffered.set(app.controller.getPlaybackState() == Player.STATE_READY
-                        && !app.controller.isLoading() && app.controller.getBufferedPercentage() == 100);
+        try {
+            Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+                app.onMain(() -> {
+                    assertNull(observedPlayer.getPlayerError());
+                    buffered.set(observedPlayer.getPlaybackState() == Player.STATE_READY
+                            && !observedPlayer.isLoading() && observedPlayer.getBufferedPercentage() == 100);
+                });
+                return buffered.get();
             });
-            return buffered.get();
-        });
+        } catch (ConditionTimeoutException timeout) {
+            logState("fully buffered timeout responseBytes=" + app.server.getBodyBytes());
+            throw timeout;
+        }
     }
 
     void awaitReady() {
