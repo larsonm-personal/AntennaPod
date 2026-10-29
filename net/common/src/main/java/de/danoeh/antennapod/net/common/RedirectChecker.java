@@ -54,6 +54,20 @@ public abstract class RedirectChecker {
     }
 
     @NonNull
+    public static String getFinalUrlOrThrow(@NonNull String url, @Nullable String authorization) throws IOException {
+        Request.Builder request = new Request.Builder().url(url).head();
+        if (authorization != null) {
+            request.header("Authorization", authorization);
+        }
+        try (Response response = AntennapodHttpClient.getHttpClient().newCall(request.build()).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Resolution failed with HTTP " + response.code());
+            }
+            return response.request().url().toString();
+        }
+    }
+
+    @NonNull
     public static String getFinalUrl(@NonNull String url) {
         if (TextUtils.isEmpty(url) || !url.startsWith("http")) {
             return url;
