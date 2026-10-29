@@ -78,3 +78,20 @@ identical-content control. These are harness/readiness failures, not qualified
 content results. The next diagnostic snapshot logs controller and player state
 without changing assertions, targets, tolerances or deadlines, and prints a bounded
 excerpt beside the full CI artifact. The production-fix comparison remains paused.
+
+The diagnostic run 40824447053 at `124497ac6` reproduced the readiness problem:
+the actual player was READY with the complete 122044 or 182099 ms file buffered,
+while the paused controller reported only 182–470 ms buffered. Readiness now uses
+the controller's READY state, not its stale buffered-position estimate. The same
+60-second deadline and subsequent consumed-audio requirements remain in place.
+Media3's periodic position updates run only while playing or loading; the paused,
+fully loaded player need not supply another periodic buffer estimate.
+
+In all six diagnostic restart cases, the 137056 ms candidate was followed by an
+empty playlist in both the controller and actual player. Its 60-second observation
+produced no qualifying passage. The service clears its playlist when playback ends
+without a next queued episode. An unset duration at the following candidate now
+records an unavailable passage instead of aborting with a setup assertion. It never
+counts as recovery. The fixed replay still requires actual consumed program audio;
+the target coordinates, sampled windows, tolerances and observation budgets have
+not changed. The original failed runs and diagnostic snapshot remain preserved.
