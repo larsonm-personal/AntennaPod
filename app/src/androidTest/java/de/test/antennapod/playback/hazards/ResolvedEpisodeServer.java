@@ -27,6 +27,8 @@ public class ResolvedEpisodeServer extends HTTPBin {
     private volatile CountDownLatch responseGate = new CountDownLatch(0);
     private volatile int throttleAfter;
     private volatile boolean prefixSent;
+    private volatile boolean replaceA;
+    private volatile boolean redirectAGets;
 
     public void start(File a, File b) throws Exception {
         initial = a;
@@ -55,6 +57,14 @@ public class ResolvedEpisodeServer extends HTTPBin {
         if (!switched.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("Server scenario did not switch to B");
         }
+    }
+
+    public void replaceAWithB() {
+        replaceA = true;
+    }
+
+    public void redirectGetsFromAToB() {
+        redirectAGets = true;
     }
 
     public void throttleResponsesAfter(int bytes) {
@@ -102,7 +112,8 @@ public class ResolvedEpisodeServer extends HTTPBin {
         synchronized (this) {
             requests.add(session.getMethod() + " " + name + " " + range);
         }
-        if (name.equals("original")) {
+        boolean redirectGet = redirectAGets && name.equals("A") && session.getMethod() == Method.GET;
+        if (name.equals("original") || redirectGet) {
             Response response = new Response(new Response.IStatus() {
                 @Override
                 public int getRequestStatus() {
@@ -114,13 +125,13 @@ public class ResolvedEpisodeServer extends HTTPBin {
                     return "302 Found";
                 }
             }, "text/plain", "");
-            response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + resolved);
+            response.addHeader("Location", getBaseUrl() + "/resolved-ad/" + (redirectGet ? "B" : resolved));
             return response;
         }
         if (!name.equals("A") && !name.equals("B")) {
             return new Response(Response.Status.NOT_FOUND, "text/plain", "");
         }
-        File file = name.equals("B") ? changed : initial;
+        File file = name.equals("B") || replaceA ? changed : initial;
         long start = 0;
         long end = file.length() - 1;
         if (range != null) {

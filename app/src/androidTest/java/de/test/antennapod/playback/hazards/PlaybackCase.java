@@ -70,8 +70,12 @@ public abstract class PlaybackCase {
     }
 
     void start(boolean identical, int position, boolean partial) throws Exception {
+        start(identical ? "tagged-a.mp3" : "tagged-b.mp3", position, partial);
+    }
+
+    void start(String second, int position, boolean partial) throws Exception {
         initialized = true;
-        app.setUp("tagged-a.mp3", identical ? "tagged-a.mp3" : "tagged-b.mp3");
+        app.setUp("tagged-a.mp3", second);
         if (!partial) {
             app.server.resumeResponses();
         }
@@ -80,6 +84,37 @@ public abstract class PlaybackCase {
         assertEquals(1, messages.size());
         messages.get(0).blockUntilDelivered(5000);
         select(app.media, position);
+    }
+
+    void primeCachedEpisode(boolean equalLength) throws Exception {
+        start(equalLength ? "tagged-equal-length.mp3" : "tagged-b.mp3", 70, true);
+        sample(() -> app.controller.play(), 0, 70);
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            List<ResolvedTaggedAudio.Heard> heard = audio.heard();
+            return app.server.hasSentPrefix() && !heard.isEmpty()
+                    && heard.get(heard.size() - 1).program >= 25;
+        });
+        app.stopService();
+    }
+
+    void restartAndCheckPassages() throws Exception {
+        app.server.resumeResponses();
+        app.connect();
+        int first = audio.heard().size();
+        app.onMain(() -> app.controller.play());
+        sampledContent(first, false);
+        checkPassages();
+    }
+
+    void checkPassages() {
+        for (int replay = 0; replay < 2; replay++) {
+            for (int program : new int[] {75, 105, 90}) {
+                boolean reached = reaches(program);
+                if (replay == 1) {
+                    assertTrue("Program passage " + program + " unavailable on the fixed replay", reached);
+                }
+            }
+        }
     }
 
     void select(FeedMedia media, int position) {
@@ -93,8 +128,8 @@ public abstract class PlaybackCase {
     }
 
     FeedMedia addEpisode(String route) {
-        Feed feed = new Feed(app.server.getBaseUrl() + "/second-feed", null, "Synthetic second feed", null, null);
-        FeedItem item = new FeedItem(0, "Synthetic second episode", "second", null, new Date(),
+        Feed feed = new Feed(app.server.getBaseUrl() + "/" + route + "-feed", null, "Synthetic second feed", null, null);
+        FeedItem item = new FeedItem(0, "Synthetic second episode", route, null, new Date(),
                 FeedItem.UNPLAYED, feed);
         FeedMedia media = new FeedMedia(item, app.server.getBaseUrl() + "/resolved-ad/" + route, 0, "audio/mpeg");
         item.setMedia(media);

@@ -27,7 +27,7 @@ elif [ "$MODE" = long-failure ]; then
 elif [ "$MODE" = missing ]; then
     echo 'INSTRUMENTATION_FAILED: unavailable'
 else
-    echo 'OK (21 tests)'
+    echo 'OK (27 tests)'
     echo 'INSTRUMENTATION_CODE: -1'
 fi
 STUB

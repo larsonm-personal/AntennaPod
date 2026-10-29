@@ -74,6 +74,31 @@ public class ResolvedEpisodeServerTest {
     }
 
     @Test
+    public void sameUrlCanChangeBytesAndLength() throws Exception {
+        assertArrayEquals(bytesA, read("A", null, 200));
+        server.replaceAWithB();
+        assertArrayEquals(bytesB, read("A", null, 200));
+        assertRedirect("HEAD", "A");
+    }
+
+    @Test
+    public void headAndGetCanSelectDifferentEditions() throws Exception {
+        server.redirectGetsFromAToB();
+        HttpURLConnection head = open("A", "HEAD", null);
+        HttpURLConnection get = open("A", "GET", null);
+        try {
+            assertEquals(200, head.getResponseCode());
+            assertEquals(bytesA.length, head.getContentLength());
+            assertEquals(302, get.getResponseCode());
+            assertTrue(get.getHeaderField("Location").endsWith("/B"));
+            assertArrayEquals(bytesB, read("B", null, 200));
+        } finally {
+            head.disconnect();
+            get.disconnect();
+        }
+    }
+
+    @Test
     public void rangesAndEndOfFileAreCoherent() throws Exception {
         assertArrayEquals(Arrays.copyOfRange(bytesA, 100, 200), read("A", "bytes=100-199", 206));
         assertArrayEquals(Arrays.copyOfRange(bytesB, 3900, 4000), read("B", "bytes=3900-9999", 206));

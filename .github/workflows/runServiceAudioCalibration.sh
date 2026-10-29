@@ -22,7 +22,7 @@ wait "$logcatPid" 2>/dev/null || true
 logcatPid=
 printf '%s\n' "$status" > "$output/command-status.txt"
 printf 'Full evidence: service-audio-%s-%s artifact, repetition-%s/\n' "$variant" "$repetition" "$repetition"
-if [ "$status" -ne 0 ] || ! grep -q '^OK (21 tests)' "$output/runner.txt" \
+if [ "$status" -ne 0 ] || ! grep -q '^OK (27 tests)' "$output/runner.txt" \
         || ! grep -q '^INSTRUMENTATION_CODE: -1' "$output/runner.txt"; then
     printf 'FAILED: %s repetition %s (command status %s)\n' "$variant" "$repetition" "$status"
     tail -n 40 "$output/runner.txt"
@@ -30,5 +30,5 @@ if [ "$status" -ne 0 ] || ! grep -q '^OK (21 tests)' "$output/runner.txt" \
         "$output/logcat.txt" | tail -n 140 || true
     exit 1
 else
-    printf 'PASSED: %s repetition %s, all 21 tests\n' "$variant" "$repetition"
+    printf 'PASSED: %s repetition %s, all 27 tests\n' "$variant" "$repetition"
 fi
