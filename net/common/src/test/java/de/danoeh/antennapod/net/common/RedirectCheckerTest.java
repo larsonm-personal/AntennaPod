@@ -1,8 +1,10 @@
 package de.danoeh.antennapod.net.common;
 
+import de.danoeh.antennapod.model.download.DownloadRequest;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 import okio.Buffer;
@@ -24,6 +26,7 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -160,6 +163,116 @@ public class RedirectCheckerTest {
     }
 
     @Test
+    public void crossHostUnauthorizedHeadNeverReceivesOriginalAuthorization() throws Exception {
+        try (Fixture fixture = new Fixture(200, 206, false, false)) {
+            fixture.headRedirect = fixture.url("/challenge").replace("127.0.0.1", "localhost");
+            assertThrows(IOException.class, () -> resolve(fixture, true));
+            assertEquals(AUTHORIZATION, fixture.requests.get(0).headers.get("authorization"));
+            assertNoChallengeAuthorization(fixture);
+        }
+    }
+
+    @Test
+    public void crossPortUnauthorizedHeadNeverReceivesOriginalAuthorization() throws Exception {
+        try (Fixture origin = new Fixture(200, 206, false, false);
+                Fixture target = new Fixture(200, 206, false, false)) {
+            origin.headRedirect = target.url("/challenge");
+            assertThrows(IOException.class, () -> resolve(origin, true));
+            assertEquals(AUTHORIZATION, origin.requests.get(0).headers.get("authorization"));
+            assertNoChallengeAuthorization(target);
+        }
+    }
+
+    @Test
+    public void crossOriginUnauthorizedGetFallbackNeverReceivesOriginalAuthorization() throws Exception {
+        try (Fixture origin = new Fixture(405, 206, false, false);
+                Fixture target = new Fixture(200, 206, false, false)) {
+            origin.getRedirect = target.url("/challenge");
+            assertThrows(IOException.class, () -> resolve(origin, true));
+            assertEquals(List.of("HEAD /origin", "HEAD /head-only", "GET /origin"), origin.paths());
+            assertEquals("bytes=0-0", target.requests.get(0).headers.get("range"));
+            assertNoChallengeAuthorization(target);
+        }
+    }
+
+    @Test
+    public void sameOriginUnauthorizedRedirectRetainsAuthorization() throws Exception {
+        try (Fixture fixture = new Fixture(200, 206, false, false)) {
+            fixture.headRedirect = fixture.url("/challenge");
+            fixture.acceptedAuthorization = AUTHORIZATION;
+            fixture.challengesBeforeSuccess = 1;
+            assertEquals(fixture.url("/challenge"), resolve(fixture, true));
+            assertEquals(List.of(AUTHORIZATION, AUTHORIZATION), fixture.challengeHeaders());
+        }
+    }
+
+    @Test
+    public void returnToOriginalOriginCanRecoverAuthorizationAfterForeignHop() throws Exception {
+        try (Fixture origin = new Fixture(200, 206, false, false);
+                Fixture foreign = new Fixture(200, 206, false, false)) {
+            origin.headRedirect = foreign.url("/origin");
+            foreign.headRedirect = origin.url("/challenge");
+            origin.acceptedAuthorization = AUTHORIZATION;
+            assertEquals(origin.url("/challenge"), resolve(origin, true));
+            assertNull(foreign.requests.get(0).headers.get("authorization"));
+            assertEquals(Arrays.asList(null, AUTHORIZATION), origin.challengeHeaders());
+        }
+    }
+
+    @Test
+    public void crossOriginChallengeNeverReceivesDownloadTagCredentials() throws Exception {
+        checkDownloadTag(false, true);
+    }
+
+    @Test
+    public void crossOriginChallengeNeverReceivesDownloadSourceUserInfo() throws Exception {
+        checkDownloadTag(true, true);
+    }
+
+    @Test
+    public void sameOriginDownloadTagTriesBothCredentialEncodings() throws Exception {
+        checkDownloadTag(false, false);
+    }
+
+    @Test
+    public void sameOriginDownloadSourceUserInfoTriesBothCredentialEncodings() throws Exception {
+        checkDownloadTag(true, false);
+    }
+
+    private void checkDownloadTag(boolean sourceUserInfo, boolean crossOrigin) throws Exception {
+        try (Fixture origin = new Fixture(200, 206, false, false);
+                Fixture target = new Fixture(200, 206, false, false)) {
+            String url = crossOrigin ? origin.url("/origin") : target.url("/challenge");
+            origin.getRedirect = target.url("/challenge");
+            String source = sourceUserInfo ? url.replace("http://", "http://f%C3%AFxture:p%C3%A4ssword@") : url;
+            DownloadRequest download = new DownloadRequest("unused", source, "Synthetic download", 0, 0,
+                    sourceUserInfo ? "ignored" : "fïxture", sourceUserInfo ? "ignored" : "pässword", null, false);
+            String iso = HttpCredentialEncoder.encode("fïxture", "pässword", "ISO-8859-1");
+            String utf = HttpCredentialEncoder.encode("fïxture", "pässword", "UTF-8");
+            if (!crossOrigin) {
+                target.acceptedAuthorization = utf;
+            }
+            try (Response response = client.newCall(new Request.Builder().url(url).tag(download).build()).execute()) {
+                assertEquals(crossOrigin ? 401 : 200, response.code());
+            }
+            if (crossOrigin) {
+                assertNoChallengeAuthorization(target);
+            } else {
+                assertFalse(iso.equals(utf));
+                assertEquals(Arrays.asList(null, iso, utf), target.challengeHeaders());
+            }
+        }
+    }
+
+    private static void assertNoChallengeAuthorization(Fixture fixture) {
+        List<String> headers = fixture.challengeHeaders();
+        assertFalse(headers.isEmpty());
+        for (String header : headers) {
+            assertNull("Credentials crossed the original HTTP origin", header);
+        }
+    }
+
+    @Test
     public void legacy405RestartsGetAtTheOriginalUrl() throws Exception {
         checkFallback(405, false);
     }
@@ -249,10 +362,15 @@ public class RedirectCheckerTest {
     private static final class Fixture implements AutoCloseable {
         final boolean crossHost;
         final List<RecordedRequest> requests = Collections.synchronizedList(new ArrayList<>());
+        volatile String headRedirect;
+        volatile String getRedirect;
+        volatile String acceptedAuthorization;
+        volatile int challengesBeforeSuccess;
         private final ServerSocket server;
         private final Thread thread;
         private final AtomicReference<Throwable> failure = new AtomicReference<>();
         private volatile Socket activeSocket;
+        private int challenges;
 
         Fixture(int headStatus, int getStatus, boolean ignoreRange, boolean crossHost) throws IOException {
             this.crossHost = crossHost;
@@ -280,7 +398,12 @@ public class RedirectCheckerTest {
                         int status;
                         if ("/origin".equals(path)) {
                             status = 302;
-                            location = "Location: " + ("HEAD".equals(method) ? url("/head-only") : freshUrl()) + "\r\n";
+                            String target = "HEAD".equals(method) ? headRedirect : getRedirect;
+                            location = "Location: " + (target != null ? target
+                                    : "HEAD".equals(method) ? url("/head-only") : freshUrl()) + "\r\n";
+                        } else if ("/challenge".equals(path)) {
+                            status = ++challenges > challengesBeforeSuccess && acceptedAuthorization != null
+                                    && acceptedAuthorization.equals(headers.get("authorization")) ? 200 : 401;
                         } else if ("HEAD".equals(method) && "/head-only".equals(path)) {
                             status = headStatus;
                         } else {
@@ -322,6 +445,11 @@ public class RedirectCheckerTest {
 
         List<String> paths() {
             return List.copyOf(requests).stream().map(request -> request.method + " " + request.path).toList();
+        }
+
+        List<String> challengeHeaders() {
+            return List.copyOf(requests).stream().filter(request -> "/challenge".equals(request.path))
+                    .map(request -> request.headers.get("authorization")).toList();
         }
 
         @Override
