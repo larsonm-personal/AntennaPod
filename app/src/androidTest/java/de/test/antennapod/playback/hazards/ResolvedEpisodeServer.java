@@ -1,6 +1,7 @@
 package de.test.antennapod.playback.hazards;
 
 import de.test.antennapod.util.service.download.HTTPBin;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -8,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.RandomAccessFile;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -17,10 +19,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ResolvedEpisodeServer extends HTTPBin {
+    private static final int MAX_REQUESTS = 128;
+    private static final int MAX_REQUEST_BYTES = 16 * 1024;
+    private static final int SUMMARY_BYTES = 64;
     private final CountDownLatch ready = new CountDownLatch(1);
     private final CountDownLatch switchRequested = new CountDownLatch(1);
     private final CountDownLatch switched = new CountDownLatch(1);
     private final List<String> requests = new ArrayList<>();
+    private int requestBytes;
+    private long omittedRequests;
     private volatile String resolved;
     private File initial;
     private File changed;
@@ -113,7 +120,21 @@ public class ResolvedEpisodeServer extends HTTPBin {
     }
 
     public synchronized List<String> getRequests() {
-        return new ArrayList<>(requests);
+        List<String> result = new ArrayList<>(requests);
+        if (omittedRequests > 0) {
+            result.add(0, "... " + omittedRequests + " older requests omitted");
+        }
+        return result;
+    }
+
+    private synchronized void recordRequest(Method method, String name, String range) {
+        String request = method + " " + StringUtils.abbreviate(name, 96) + " " + StringUtils.abbreviate(range, 96);
+        requests.add(request);
+        requestBytes += request.getBytes(StandardCharsets.UTF_8).length;
+        while (requests.size() + 1 > MAX_REQUESTS || requestBytes + SUMMARY_BYTES > MAX_REQUEST_BYTES) {
+            requestBytes -= requests.remove(0).getBytes(StandardCharsets.UTF_8).length;
+            omittedRequests++;
+        }
     }
 
     @Override
@@ -140,9 +161,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
     public Response serve(IHTTPSession session) {
         String name = session.getUri().replace("/resolved-ad/", "");
         String range = session.getHeaders().remove("range");
-        synchronized (this) {
-            requests.add(session.getMethod() + " " + name + " " + range);
-        }
+        recordRequest(session.getMethod(), name, range);
         boolean redirectGet = redirectAGets && name.equals("A") && session.getMethod() == Method.GET;
         if (name.equals("original") || redirectGet) {
             Response response = new Response(new Response.IStatus() {
