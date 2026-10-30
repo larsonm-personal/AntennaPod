@@ -7,6 +7,22 @@ import java.io.ByteArrayInputStream;
 import org.junit.Test;
 
 public class MediaFormatDetectorTest {
+    @Test
+    public void testMpegFrameWithoutId3() throws Exception {
+        assertEquals(MediaFormatDetector.Format.MPEG_AUDIO,
+                MediaFormatDetector.detect(new ByteArrayInputStream(
+                        new byte[] {(byte) 0xff, (byte) 0xfb, (byte) 0x90, 0})).format);
+    }
+
+    @Test
+    public void testReservedMpegHeadersStayUnknown() {
+        for (byte[] header : new byte[][] {
+                {(byte) 0xff, (byte) 0xeb, (byte) 0x90, 0},
+                {(byte) 0xff, (byte) 0xf9, (byte) 0x90, 0},
+                {(byte) 0xff, (byte) 0xfb, (byte) 0xfc, 0}}) {
+            assertEquals(MediaFormatDetector.Format.UNKNOWN, MediaFormatDetector.detectFormat(header));
+        }
+    }
 
     @Test
     public void testMagicId3_detectsId3() throws Exception {

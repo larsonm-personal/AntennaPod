@@ -1,6 +1,9 @@
 package de.danoeh.antennapod.ui.chapters;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 import android.content.Context;
 
@@ -11,14 +14,95 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 
 import java.io.File;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import de.danoeh.antennapod.model.feed.Chapter;
 import de.danoeh.antennapod.model.feed.FeedMedia;
+import de.danoeh.antennapod.net.common.AntennapodHttpClient;
 import de.danoeh.antennapod.parser.media.MediaFormatDetector;
 
 @RunWith(RobolectricTestRunner.class)
 public class ChapterUtilsTest {
+    private final List<String> ranges = new ArrayList<>();
+
+    @Test
+    public void untaggedMpegNeedsOnlyABoundedHeaderRequest() throws Exception {
+        byte[] bytes = new byte[1000000];
+        bytes[0] = (byte) 0xff;
+        bytes[1] = (byte) 0xfb;
+        bytes[2] = (byte) 0x90;
+        assertTrue(loadNetworkChapters(bytes, 1).isEmpty());
+        assertEquals(List.of("bytes=0-63"), ranges);
+    }
+
+    @Test
+    public void id3ChaptersNeedOnlyTheDeclaredTag() throws Exception {
+        byte[] bytes = Files.readAllBytes(new File(getClass().getClassLoader()
+                .getResource("auphonic.mp3").toURI()).toPath());
+        int size = (bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9];
+        List<Chapter> chapters = loadNetworkChapters(bytes, 2);
+        assertEquals(4, chapters.size());
+        assertEquals("Chapter 1 - ❤️😊", chapters.get(0).getTitle());
+        assertEquals(List.of("bytes=0-63", "bytes=0-" + (size + 9)), ranges);
+        assertTrue(size + 10 < bytes.length);
+    }
+
+    private List<Chapter> loadNetworkChapters(byte[] bytes, int requests) throws Exception {
+        Context context = ApplicationProvider.getApplicationContext();
+        AntennapodHttpClient.setCacheDirectory(new File(context.getCacheDir(), "chapter-probe-test"));
+        AntennapodHttpClient.reinit();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ServerSocket server = new ServerSocket(0);
+        try {
+            server.setSoTimeout(5000);
+            Thread response = new Thread(() -> {
+                try {
+                    for (int request = 0; request < requests; request++) {
+                        try (Socket socket = server.accept()) {
+                            socket.setSoTimeout(5000);
+                            BufferedReader input = new BufferedReader(new InputStreamReader(
+                                    socket.getInputStream(), StandardCharsets.US_ASCII));
+                            String range = null;
+                            for (String line; !(line = input.readLine()).isEmpty();) {
+                                if (line.startsWith("Range: ")) {
+                                    range = line.substring(7);
+                                }
+                            }
+                            ranges.add(range);
+                            int length = range == null ? bytes.length : Math.min(bytes.length,
+                                    Integer.parseInt(range.substring(range.indexOf('-') + 1)) + 1);
+                            socket.getOutputStream().write(((range == null ? "HTTP/1.1 200 OK" : "HTTP/1.1 206 Partial")
+                                    + "\r\nContent-Length: " + length + "\r\nContent-Range: bytes 0-" + (length - 1)
+                                    + "/" + bytes.length + "\r\nConnection: close\r\n\r\n")
+                                    .getBytes(StandardCharsets.US_ASCII));
+                            socket.getOutputStream().write(bytes, 0, length);
+                        }
+                    }
+                    server.close();
+                } catch (Throwable error) {
+                    failure.set(error);
+                }
+            }, "chapter-probe-test");
+            response.start();
+            FeedMedia media = new FeedMedia(1, null, 0, 0, 0, "audio/mpeg", null,
+                    "http://127.0.0.1:" + server.getLocalPort() + "/episode", 1, null, 0, 0);
+            List<Chapter> chapters = ChapterUtils.loadChaptersFromMediaFile(media, context);
+            response.join(5000);
+            assertFalse(response.isAlive());
+            assertNull(failure.get());
+            return chapters;
+        } finally {
+            server.close();
+        }
+    }
 
     @Test
     public void testMimeMpeg_selectsId3() {
