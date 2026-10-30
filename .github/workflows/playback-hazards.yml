@@ -31,17 +31,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 ffmpeg
           ffmpeg -hide_banner -encoders | grep libmp3lame
-          bash -n .github/workflows/runPlaybackHazards.sh .github/workflows/testPlaybackHazards.sh
           bash .github/workflows/testPlaybackHazards.sh
       - name: Temporary release keystore
         if: matrix.variant == 'release'
         run: keytool -genkeypair -dname "cn=AntennaPod CI, o=AntennaPod, c=DE" -alias alias -keystore app/keystore -storepass password -keypass password -keyalg RSA -keysize 2048 -validity 10000
       - name: Build and identify APKs
-        run: |
-          variant="${{ matrix.variant }}"
-          ./gradlew :app:assemblePlay${variant^} :app:assemblePlay${variant^}AndroidTest -PtestBuildType="$variant"
-          sha256sum app/build/outputs/apk/play/$variant/*.apk app/build/outputs/apk/androidTest/play/$variant/*.apk > app/build/outputs/apk/hashes.txt
-          cat app/build/outputs/apk/hashes.txt
+        run: bash .github/workflows/buildPlaybackHazards.sh ${{ matrix.variant }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playback-hazard-apks-${{ matrix.variant }}
@@ -83,10 +78,7 @@ jobs:
           channel: canary
           emulator-options: -accel on -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: |
-            adb install app/build/outputs/apk/play/${{ matrix.variant }}/app-play-${{ matrix.variant }}.apk
-            adb install app/build/outputs/apk/androidTest/play/${{ matrix.variant }}/app-play-${{ matrix.variant }}-androidTest.apk
-            bash .github/workflows/runPlaybackHazards.sh ${{ matrix.variant }} app/build/playback-hazards ${{ matrix.repetition }} ${{ matrix.group }}
+          script: bash .github/workflows/installPlaybackHazards.sh ${{ matrix.variant }} app/build/playback-hazards ${{ matrix.repetition }} ${{ matrix.group }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
