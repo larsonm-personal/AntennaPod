@@ -11,10 +11,13 @@ import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.HttpUtil;
 import androidx.media3.datasource.TransferListener;
 import androidx.media3.datasource.cache.Cache;
+import androidx.media3.datasource.cache.CacheSpan;
 import androidx.media3.datasource.cache.ContentMetadata;
 import androidx.media3.datasource.cache.ContentMetadataMutations;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Collections;
 import java.util.Map;
@@ -22,16 +25,20 @@ import java.util.Map;
 @OptIn(markerClass = UnstableApi.class)
 public final class ValidatingStreamDataSource implements DataSource {
     private final HttpDataSource upstream;
+    private final HttpDataSource probe;
     private final Cache cache;
     private final StreamCacheGeneration generation;
 
     private DataSpec openingSpec;
     private IOException rejectedResponse;
+    private long probePosition;
+    private boolean rangeProbesSupported = true;
 
     public ValidatingStreamDataSource(DefaultHttpDataSource.Factory factory, Cache cache,
                                      StreamCacheGeneration generation) {
         this.cache = cache;
         this.generation = generation;
+        probe = factory.setContentTypePredicate(type -> probeRangeMatches()).createDataSource();
         upstream = factory.setContentTypePredicate(type -> {
             try {
                 validateResponse(openingSpec, false);
@@ -45,6 +52,7 @@ public final class ValidatingStreamDataSource implements DataSource {
 
     public ValidatingStreamDataSource(HttpDataSource upstream, Cache cache, StreamCacheGeneration generation) {
         this.upstream = upstream;
+        probe = null;
         this.cache = cache;
         this.generation = generation;
     }
@@ -56,6 +64,7 @@ public final class ValidatingStreamDataSource implements DataSource {
         if (spec.key == null) {
             return upstream.open(spec);
         }
+        validateOverlap(spec);
         ContentMetadata metadata = cache.getContentMetadata(spec.key);
         long previousLength = ContentMetadata.getContentLength(metadata);
         Uri previousUri = getCachedUri(metadata);
@@ -90,8 +99,11 @@ public final class ValidatingStreamDataSource implements DataSource {
             ContentMetadata metadata = cache.getContentMetadata(spec.key);
             long previousLength = ContentMetadata.getContentLength(metadata);
             Uri previousUri = getCachedUri(metadata);
+            String etag = header(upstream.getResponseHeaders(), "ETag");
+            String previousEtag = metadata.get("custom_stream_etag", (String) null);
             if ((previousLength != C.LENGTH_UNSET && length != C.LENGTH_UNSET && previousLength != length)
-                    || (previousUri != null && !previousUri.equals(upstream.getUri()))) {
+                    || (previousUri != null && !previousUri.equals(upstream.getUri()))
+                    || (isStrongEtag(etag) && previousEtag != null && !previousEtag.equals(etag))) {
                 throw new ChangedException(generation, spec.uri.toString(), false, null);
             }
             if (!store) {
@@ -102,8 +114,93 @@ public final class ValidatingStreamDataSource implements DataSource {
                 ContentMetadataMutations.setContentLength(mutations, length);
             }
             mutations.set("custom_stream_actual_uri", upstream.getUri().toString());
+            if (isStrongEtag(etag)) {
+                mutations.set("custom_stream_etag", etag);
+            }
             cache.applyContentMetadataMutations(spec.key, mutations);
         }
+    }
+
+    private void validateOverlap(DataSpec spec) throws IOException {
+        if (probe == null || !rangeProbesSupported) {
+            return;
+        }
+        CacheSpan before = null;
+        CacheSpan after = null;
+        for (CacheSpan span : cache.getCachedSpans(spec.key)) {
+            if (span.position + span.length <= spec.position) {
+                before = span;
+            } else if (span.position >= spec.position) {
+                after = span;
+                break;
+            }
+        }
+        if (before != null) {
+            compareOverlap(spec, before, before.position + before.length - Math.min(4096, before.length));
+        }
+        if (rangeProbesSupported && after != null
+                && (spec.length == C.LENGTH_UNSET || after.position <= spec.position + spec.length)) {
+            compareOverlap(spec, after, after.position);
+        }
+    }
+
+    private boolean probeRangeMatches() {
+        String range = header(probe.getResponseHeaders(), "Content-Range");
+        return probe.getResponseCode() == 206 && range != null && range.startsWith("bytes " + probePosition + "-");
+    }
+
+    private void compareOverlap(DataSpec spec, CacheSpan span, long position) throws IOException {
+        int size = (int) Math.min(4096, span.position + span.length - position);
+        byte[] expected = new byte[size];
+        try (RandomAccessFile file = new RandomAccessFile(span.file, "r")) {
+            file.seek(position - span.position);
+            file.readFully(expected);
+        }
+        probePosition = position;
+        try {
+            probe.open(spec.buildUpon().setPosition(position).setLength(size).setKey(null).build());
+            byte[] actual = new byte[size];
+            int read = 0;
+            while (read < size) {
+                int count = probe.read(actual, read, size - read);
+                if (count == C.RESULT_END_OF_INPUT) {
+                    break;
+                }
+                read += count;
+            }
+            if (read != size || !Arrays.equals(expected, actual)) {
+                throw new ChangedException(generation, spec.uri.toString(), false, null);
+            }
+        } catch (HttpDataSource.InvalidContentTypeException error) {
+            if (probe.getResponseCode() == 200) {
+                rangeProbesSupported = false;
+                return;
+            }
+            throw new ChangedException(generation, spec.uri.toString(), false, error);
+        } catch (HttpDataSource.InvalidResponseCodeException error) {
+            if (error.responseCode == 403 || error.responseCode == 404 || error.responseCode == 410) {
+                throw new ChangedException(generation, spec.uri.toString(), true, error);
+            }
+            if (error.responseCode == 416) {
+                throw new ChangedException(generation, spec.uri.toString(), false, error);
+            }
+            throw error;
+        } finally {
+            probe.close();
+        }
+    }
+
+    private static boolean isStrongEtag(String etag) {
+        return etag != null && etag.startsWith("\"") && etag.endsWith("\"");
+    }
+
+    private static String header(Map<String, List<String>> headers, String name) {
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            if (name.equalsIgnoreCase(entry.getKey()) && entry.getValue().size() == 1) {
+                return entry.getValue().get(0);
+            }
+        }
+        return null;
     }
 
     static Uri getCachedUri(ContentMetadata metadata) {
