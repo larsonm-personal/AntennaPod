@@ -31,12 +31,28 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi
 public class PlaybackLifecycleTest extends PlaybackCase {
+    @Test
+    public void unpreparedServiceCanBeStoppedAndConnectedAgain() throws Exception {
+        try {
+            app.setUp("tagged-a.mp3", "tagged-b.mp3");
+            app.connect();
+            app.stopService();
+            assertNull(app.controller);
+            app.connect();
+            app.stopService();
+            assertNull(app.controller);
+        } finally {
+            app.tearDown();
+        }
+    }
+
     @Test
     public void pausedPreparationDoesNotCountQueuedAudio() throws Exception {
         start(false);

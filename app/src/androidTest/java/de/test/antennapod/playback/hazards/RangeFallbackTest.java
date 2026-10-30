@@ -26,4 +26,12 @@ public class RangeFallbackTest extends PlaybackCase {
         app.server.ignoreRanges();
         restartAndCheckPassages();
     }
+
+    @Test
+    public void ignoredRangeWithEqualLengthMutationKeepsPassagesReachable() throws Exception {
+        primeCachedEpisode(true);
+        app.server.replaceAWithB();
+        app.server.ignoreRanges();
+        restartAndCheckPassages();
+    }
 }

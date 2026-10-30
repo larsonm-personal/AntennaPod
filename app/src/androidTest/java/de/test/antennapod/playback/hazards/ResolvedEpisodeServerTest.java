@@ -14,6 +14,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 
@@ -160,6 +162,7 @@ public class ResolvedEpisodeServerTest {
     public void disconnectedResponseDoesNotPoisonTheNextRequest() throws Exception {
         server.throttleResponsesAfter(1024);
         HttpURLConnection response = open("A", "GET", null);
+        response.setReadTimeout(2000);
         int received = 1024;
         try (InputStream input = response.getInputStream()) {
             IOUtils.readFully(input, new byte[1024]);
@@ -171,6 +174,7 @@ public class ResolvedEpisodeServerTest {
                     received++;
                 }
             } catch (IOException interrupted) {
+                assertFalse("Disconnected response remained open", interrupted instanceof SocketTimeoutException);
                 assertTrue("No synthetic interruption", server.getInterruptedResponses() > 0);
             }
             assertTrue("Response was not interrupted", received < bytesA.length);

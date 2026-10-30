@@ -28,6 +28,8 @@ public class PassageOracleTest extends PlaybackCase {
                     band + (75 + index * 0.25) * 12.5}, index));
         }
         assertTrue(matchesPassage(windows, 75));
+        windows.set(2, new ResolvedTaggedAudio.Heard(new double[] {0.625, Double.NaN}, 2));
+        assertFalse(matchesPassage(windows, 75));
         windows.set(2, new ResolvedTaggedAudio.Heard(new double[] {0.125, 500 + 15 * 12.5}, 2));
         assertFalse(matchesPassage(windows, 75));
         assertFalse(matchesPassage(Collections.emptyList(), 75));
