@@ -16,11 +16,15 @@ import androidx.media3.datasource.cache.ContentMetadata;
 import androidx.media3.datasource.cache.ContentMetadataMutations;
 
 import java.io.IOException;
+import java.io.EOFException;
+import java.io.InterruptedIOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Collections;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @OptIn(markerClass = UnstableApi.class)
 public final class ValidatingStreamDataSource implements DataSource {
@@ -33,6 +37,11 @@ public final class ValidatingStreamDataSource implements DataSource {
     private IOException rejectedResponse;
     private long probePosition;
     private boolean rangeProbesSupported = true;
+    private static final Pattern CONTENT_RANGE = Pattern.compile("bytes (\\d+)-(\\d+)/(\\d+|\\*)");
+    private long responseRemaining;
+    private long remaining;
+    private byte[] left = new byte[0];
+    private byte[] right = new byte[0];
 
     public ValidatingStreamDataSource(DefaultHttpDataSource.Factory factory, Cache cache,
                                      StreamCacheGeneration generation) {
@@ -61,10 +70,23 @@ public final class ValidatingStreamDataSource implements DataSource {
     public long open(DataSpec spec) throws IOException {
         openingSpec = spec;
         rejectedResponse = null;
+        remaining = C.LENGTH_UNSET;
+        responseRemaining = C.LENGTH_UNSET;
+        left = new byte[0];
+        right = new byte[0];
         if (spec.key == null) {
             return upstream.open(spec);
         }
         validateOverlap(spec);
+        boolean expanded = left.length > 0 || right.length > 0;
+        if (expanded) {
+            if (spec.length > Long.MAX_VALUE - left.length - right.length
+                    || spec.position - left.length > Long.MAX_VALUE - spec.length - left.length - right.length) {
+                throw new IOException("Expanded range exceeds supported offsets");
+            }
+            openingSpec = spec.buildUpon().setPosition(spec.position - left.length)
+                    .setLength(spec.length + left.length + right.length).build();
+        }
         ContentMetadata metadata = cache.getContentMetadata(spec.key);
         long previousLength = ContentMetadata.getContentLength(metadata);
         Uri previousUri = getCachedUri(metadata);
@@ -72,11 +94,12 @@ public final class ValidatingStreamDataSource implements DataSource {
                 || !cache.getCachedSpans(spec.key).isEmpty();
         long result;
         try {
-            result = upstream.open(spec);
+            result = upstream.open(openingSpec);
         } catch (HttpDataSource.InvalidContentTypeException error) {
             throw rejectedResponse == null ? error : rejectedResponse;
         } catch (HttpDataSource.InvalidResponseCodeException error) {
             long rejectedLength = error.responseCode == 416 ? totalLength(416, error.headerFields) : C.LENGTH_UNSET;
+            validateCachedLength(spec, rejectedLength);
             if (previousLength != C.LENGTH_UNSET && rejectedLength != C.LENGTH_UNSET
                     && previousLength != rejectedLength) {
                 throw new ChangedException(generation, spec.uri.toString(), false, error);
@@ -86,16 +109,32 @@ public final class ValidatingStreamDataSource implements DataSource {
             }
             throw error;
         }
-        validateResponse(spec, true);
-        return result;
+        validateResponse(openingSpec, false);
+        if (expanded) {
+            compareActual(left);
+        }
+        long total = totalLength(upstream.getResponseCode(), upstream.getResponseHeaders());
+        if (expanded || (upstream.getResponseCode() == 206 && spec.length != C.LENGTH_UNSET)) {
+            remaining = right.length == 0 && total >= spec.position
+                    ? Math.min(spec.length, total - spec.position) : spec.length;
+        } else if (spec.length == C.LENGTH_UNSET && upstream.getResponseCode() == 206 && total >= spec.position) {
+            remaining = total - spec.position;
+            result = remaining;
+        }
+        validateResponse(openingSpec, true);
+        return expanded ? spec.length : result;
     }
 
     private void validateResponse(DataSpec spec, boolean store) throws IOException {
         if (spec == null || spec.key == null) {
             return;
         }
+        if (!store) {
+            validateRange(spec);
+        }
         long length = totalLength(upstream.getResponseCode(), upstream.getResponseHeaders());
         synchronized (cache) {
+            validateCachedLength(spec, length);
             ContentMetadata metadata = cache.getContentMetadata(spec.key);
             long previousLength = ContentMetadata.getContentLength(metadata);
             Uri previousUri = getCachedUri(metadata);
@@ -121,13 +160,27 @@ public final class ValidatingStreamDataSource implements DataSource {
         }
     }
 
-    private void validateOverlap(DataSpec spec) throws IOException {
-        if (probe == null || !rangeProbesSupported) {
+    private void validateCachedLength(DataSpec spec, long length) throws IOException {
+        if (length == C.LENGTH_UNSET) {
             return;
         }
+        for (CacheSpan span : cache.getCachedSpans(spec.key)) {
+            if (span.position > length || span.length > length - span.position) {
+                generation.invalidate();
+                throw new ChangedException(generation, spec.uri.toString(), false, null);
+            }
+        }
+    }
+
+    private void validateOverlap(DataSpec spec) throws IOException {
         CacheSpan before = null;
         CacheSpan after = null;
+        CacheSpan prefix = null;
+        boolean checkedPrefix = false;
         for (CacheSpan span : cache.getCachedSpans(spec.key)) {
+            if (span.position == 0) {
+                prefix = span;
+            }
             if (span.position + span.length <= spec.position) {
                 before = span;
             } else if (span.position >= spec.position) {
@@ -136,29 +189,124 @@ public final class ValidatingStreamDataSource implements DataSource {
             }
         }
         if (before != null) {
-            compareOverlap(spec, before, before.position + before.length - Math.min(4096, before.length));
+            long position = before.position + before.length - Math.min(4096, before.length);
+            if (spec.length != C.LENGTH_UNSET && before.position + before.length == spec.position) {
+                left = cachedBytes(before, position);
+            } else if (probe != null && rangeProbesSupported) {
+                compareOverlap(spec, before, position);
+                checkedPrefix = position == 0;
+            }
         }
-        if (rangeProbesSupported && after != null
-                && (spec.length == C.LENGTH_UNSET || after.position <= spec.position + spec.length)) {
+        if (after != null && spec.length != C.LENGTH_UNSET && after.position - spec.position == spec.length) {
+            right = cachedBytes(after, after.position);
+        } else if (probe != null && rangeProbesSupported && after != null
+                && (spec.length == C.LENGTH_UNSET || after.position - spec.position <= spec.length)) {
             compareOverlap(spec, after, after.position);
+            checkedPrefix |= after.position == 0;
+        }
+        if (probe != null && !rangeProbesSupported && prefix != null && !checkedPrefix) {
+            compareOverlap(spec, prefix, 0);
+        }
+    }
+
+    private static byte[] cachedBytes(CacheSpan span, long position) throws IOException {
+        byte[] bytes = new byte[(int) Math.min(4096, span.position + span.length - position)];
+        try (RandomAccessFile file = new RandomAccessFile(span.file, "r")) {
+            file.seek(position - span.position);
+            file.readFully(bytes);
+        }
+        return bytes;
+    }
+
+    private void validateRange(DataSpec spec) throws IOException {
+        responseRemaining = C.LENGTH_UNSET;
+        if (upstream.getResponseCode() != 206) {
+            return;
+        }
+        String value = header(upstream.getResponseHeaders(), "Content-Range");
+        for (Map.Entry<String, List<String>> entry : upstream.getResponseHeaders().entrySet()) {
+            if ("Content-Encoding".equalsIgnoreCase(entry.getKey())
+                    && !entry.getValue().equals(Collections.singletonList("identity"))) {
+                throw new IOException("Encoded partial response cannot establish byte offsets");
+            }
+        }
+        Matcher range = CONTENT_RANGE.matcher(value == null ? "" : value);
+        if (!range.matches()) {
+            throw new IOException("Missing or malformed Content-Range");
+        }
+        try {
+            long start = Long.parseLong(range.group(1));
+            long end = Long.parseLong(range.group(2));
+            long total = "*".equals(range.group(3)) ? C.LENGTH_UNSET : Long.parseLong(range.group(3));
+            if (start != spec.position || end < start || end == Long.MAX_VALUE
+                    || (total != C.LENGTH_UNSET && end >= total)
+                    || (spec.length != C.LENGTH_UNSET && end - start >= spec.length)) {
+                throw new IOException("Unexpected partial response range");
+            }
+            responseRemaining = end - start + 1;
+            for (Map.Entry<String, List<String>> entry : upstream.getResponseHeaders().entrySet()) {
+                if ("Content-Length".equalsIgnoreCase(entry.getKey())) {
+                    for (String contentLength : entry.getValue()) {
+                        if (Long.parseLong(contentLength.trim()) != responseRemaining) {
+                            throw new IOException("Content-Length disagrees with partial response range");
+                        }
+                    }
+                }
+            }
+        } catch (NumberFormatException error) {
+            throw new IOException("Invalid partial response length or offset", error);
+        }
+    }
+
+    private int readActual(byte[] buffer, int offset, int length) throws IOException {
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedIOException("Stream read interrupted");
+        }
+        if (responseRemaining == 0) {
+            throw new EOFException("Partial response ended before requested data");
+        }
+        int count = upstream.read(buffer, offset, responseRemaining == C.LENGTH_UNSET
+                ? length : (int) Math.min(length, responseRemaining));
+        if (Thread.currentThread().isInterrupted()) {
+            throw new InterruptedIOException("Stream read interrupted");
+        }
+        if (count == C.RESULT_END_OF_INPUT) {
+            throw new EOFException("Response ended before requested data");
+        }
+        if (responseRemaining != C.LENGTH_UNSET) {
+            responseRemaining -= count;
+        }
+        return count;
+    }
+
+    private void compareActual(byte[] expected) throws IOException {
+        byte[] actual = new byte[expected.length];
+        int read = 0;
+        while (read < actual.length) {
+            read += readActual(actual, read, actual.length - read);
+        }
+        if (!Arrays.equals(expected, actual)) {
+            generation.invalidate();
+            throw new ChangedException(generation, openingSpec.uri.toString(), false, null);
         }
     }
 
     private boolean probeRangeMatches() {
         String range = header(probe.getResponseHeaders(), "Content-Range");
-        return probe.getResponseCode() == 206 && range != null && range.startsWith("bytes " + probePosition + "-");
+        return (probe.getResponseCode() == 200 && probePosition == 0)
+                || (probe.getResponseCode() == 206 && range != null
+                && range.startsWith("bytes " + probePosition + "-"));
     }
 
     private void compareOverlap(DataSpec spec, CacheSpan span, long position) throws IOException {
-        int size = (int) Math.min(4096, span.position + span.length - position);
-        byte[] expected = new byte[size];
-        try (RandomAccessFile file = new RandomAccessFile(span.file, "r")) {
-            file.seek(position - span.position);
-            file.readFully(expected);
-        }
+        byte[] expected = cachedBytes(span, position);
+        int size = expected.length;
         probePosition = position;
         try {
             probe.open(spec.buildUpon().setPosition(position).setLength(size).setKey(null).build());
+            if (probe.getResponseCode() == 200) {
+                rangeProbesSupported = false;
+            }
             byte[] actual = new byte[size];
             int read = 0;
             while (read < size) {
@@ -169,6 +317,9 @@ public final class ValidatingStreamDataSource implements DataSource {
                 read += count;
             }
             if (read != size || !Arrays.equals(expected, actual)) {
+                if (read == size) {
+                    generation.invalidate();
+                }
                 throw new ChangedException(generation, spec.uri.toString(), false, null);
             }
         } catch (HttpDataSource.InvalidContentTypeException error) {
@@ -243,7 +394,29 @@ public final class ValidatingStreamDataSource implements DataSource {
 
     @Override
     public int read(byte[] buffer, int offset, int length) throws IOException {
-        return upstream.read(buffer, offset, length);
+        if (remaining == C.LENGTH_UNSET) {
+            return upstream.read(buffer, offset, length);
+        }
+        if (length == 0) {
+            return 0;
+        }
+        if (remaining == 0) {
+            return C.RESULT_END_OF_INPUT;
+        }
+        if (rejectedResponse != null) {
+            throw rejectedResponse;
+        }
+        try {
+            int count = readActual(buffer, offset, (int) Math.min(length, remaining));
+            if (remaining == count) {
+                compareActual(right);
+            }
+            remaining -= count;
+            return count;
+        } catch (IOException error) {
+            rejectedResponse = error;
+            throw error;
+        }
     }
 
     @Override
