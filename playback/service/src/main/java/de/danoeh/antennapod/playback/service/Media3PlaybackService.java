@@ -17,6 +17,8 @@ import androidx.media3.common.ForwardingPlayer;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.C;
+import androidx.media3.common.Timeline;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.util.Util;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -110,6 +112,7 @@ public class Media3PlaybackService extends MediaLibraryService {
     private Disposable streamRecoveryDisposable;
     private boolean streamRecoveryUsed;
     private boolean replacingStream;
+    private long pendingStreamPosition = C.TIME_UNSET;
     private long streamRecoveryAttempt;
     private boolean destroyed;
     private long lastPositionSaveTime = 0;
@@ -396,6 +399,16 @@ public class Media3PlaybackService extends MediaLibraryService {
         }
 
         @Override
+        public void onTimelineChanged(Timeline timeline, int reason) {
+            if (pendingStreamPosition != C.TIME_UNSET && reason == Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE
+                    && player.getDuration() != C.TIME_UNSET && !timeline.isEmpty()) {
+                long position = pendingStreamPosition;
+                pendingStreamPosition = C.TIME_UNSET;
+                player.seekTo(position < player.getDuration() ? position : 0);
+            }
+        }
+
+        @Override
         public void onPlaybackStateChanged(int playbackState) {
             if (playbackState == Player.STATE_BUFFERING) {
                 EventBus.getDefault().post(BufferUpdateEvent.started());
@@ -416,6 +429,10 @@ public class Media3PlaybackService extends MediaLibraryService {
         @Override
         public void onPositionDiscontinuity(@NonNull Player.PositionInfo oldPosition,
                                             @NonNull Player.PositionInfo newPosition, int reason) {
+            if (!replacingStream && pendingStreamPosition != C.TIME_UNSET
+                    && reason == Player.DISCONTINUITY_REASON_SEEK) {
+                pendingStreamPosition = newPosition.positionMs;
+            }
             if ((reason != Player.DISCONTINUITY_REASON_SEEK && reason != Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT)
                     || currentPlayable == null || oldPosition.mediaItem == null || newPosition.mediaItem == null
                     || !oldPosition.mediaItem.mediaId.equals(newPosition.mediaItem.mediaId)
@@ -505,6 +522,7 @@ public class Media3PlaybackService extends MediaLibraryService {
     };
 
     private void invalidateStreamRecovery() {
+        pendingStreamPosition = C.TIME_UNSET;
         streamRecoveryAttempt++;
         if (streamRecoveryDisposable != null) {
             streamRecoveryDisposable.dispose();
@@ -544,11 +562,11 @@ public class Media3PlaybackService extends MediaLibraryService {
                 reportPlaybackError(error);
                 return;
             }
-            long position = player.getCurrentPosition();
+            pendingStreamPosition = player.getCurrentPosition();
             final boolean playWhenReady = player.getPlayWhenReady();
             replacingStream = true;
             try {
-                player.setMediaItem(currentItem, position);
+                player.setMediaItem(currentItem, 0);
             } finally {
                 replacingStream = false;
             }
