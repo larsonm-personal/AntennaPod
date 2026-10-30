@@ -40,13 +40,16 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 | CacheReuseTest | Stable restart and bounded response-body traffic |
 | PlaybackLifecycleTest | Paused audio, ordinary seeks, replacement, saved position and completed download |
 
-Server, observer and passage-matcher self-checks bring the selection to 47 cases.
+Server, observer and passage-matcher self-checks bring the selection to 50 cases.
 Healthy controls require successful playback, so rejecting every stream cannot
 pass. The data budget permits three warm restarts to transfer at most one cold
 fully buffered preparation's body bytes, including metadata reads but not headers.
 Eviction setup inspects spans to confirm real pressure; it does not prescribe
 cache keys in the content assertion. A different cache or prebuffering policy may
 need different setup. Such incompatibility is not a content failure.
+The test server binds only to loopback. Its diagnostic history retains at most
+128 requests and 16 KB of UTF-8 text, truncates long fields, and reports omissions;
+response-body and expiry counters remain independent of that history.
 
 ## Evidence and limits
 

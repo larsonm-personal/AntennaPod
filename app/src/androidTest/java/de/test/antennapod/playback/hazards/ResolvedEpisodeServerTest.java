@@ -2,6 +2,7 @@ package de.test.antennapod.playback.hazards;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.awaitility.Awaitility;
 import org.junit.After;
 import org.junit.Before;
@@ -14,12 +15,16 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -57,6 +62,62 @@ public class ResolvedEpisodeServerTest {
         }
         if (changed != null) {
             changed.delete();
+        }
+    }
+
+    @Test
+    public void serverBindsOnlyToItsLoopbackAddress() throws Exception {
+        try (ServerSocket otherAddress = new ServerSocket()) {
+            otherAddress.bind(new InetSocketAddress("127.0.0.2", server.getListeningPort()));
+            assertTrue(otherAddress.isBound());
+        }
+        assertArrayEquals(bytesA, read("A", null, 200));
+    }
+
+    @Test
+    public void requestHistoryKeepsRecentEntriesWithinItsLimit() throws Exception {
+        for (int index = 0; index < 160; index++) {
+            HttpURLConnection response = open("missing-" + index, "HEAD", null);
+            try {
+                assertEquals(404, response.getResponseCode());
+            } finally {
+                response.disconnect();
+            }
+        }
+        List<String> history = server.getRequests();
+        assertTrue(history.size() <= 128);
+        assertEquals("HEAD missing-159 null", history.get(history.size() - 1));
+        history.clear();
+        assertFalse(server.getRequests().isEmpty());
+    }
+
+    @Test
+    public void longRejectedRequestsHaveABoundedDiagnosticByteCost() throws Exception {
+        String name = URLEncoder.encode(StringUtils.repeat("\u754c", 256), "UTF-8");
+        String range = StringUtils.repeat("x", 512);
+        for (int index = 0; index < 100; index++) {
+            HttpURLConnection response = open("missing-" + name, "HEAD", range);
+            try {
+                assertEquals(404, response.getResponseCode());
+            } finally {
+                response.disconnect();
+            }
+        }
+        int bytes = 0;
+        for (String request : server.getRequests()) {
+            assertTrue(request.length() <= 256);
+            bytes += request.getBytes(StandardCharsets.UTF_8).length;
+        }
+        assertTrue(bytes <= 16 * 1024);
+        assertArrayEquals(Arrays.copyOfRange(bytesA, 100, 200), read("A", "bytes=100-199", 206));
+        assertEquals(100, server.getBodyBytes());
+        server.expireA();
+        HttpURLConnection expired = open("A", "HEAD", null);
+        try {
+            assertEquals(403, expired.getResponseCode());
+            assertEquals(1, server.getExpiredResponses());
+        } finally {
+            expired.disconnect();
         }
     }
 
