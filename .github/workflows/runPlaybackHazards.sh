@@ -6,11 +6,11 @@ folder="${2:-app/build/playback-hazards}"
 package="de.test.antennapod.playback.hazards"
 group="${4:-controls}"
 case "$group" in
-    controls) names="ResolvedTaggedAudioTest,ResolvedEpisodeServerTest,PassageOracleTest,PlaybackLifecycleTest"; expected=27 ;;
+    controls) names="ResolvedTaggedAudioTest,ResolvedEpisodeServerTest,PassageOracleTest,PlaybackLifecycleTest"; expected=29 ;;
     resolution) names="ResolutionChangeTest"; expected=4 ;;
     mutation) names="SameUrlChangeTest"; expected=3 ;;
     head-get) names="HeadGetDisagreementTest"; expected=1 ;;
-    transport) names="ReconnectTest,RangeFallbackTest"; expected=3 ;;
+    transport) names="ReconnectTest,RangeFallbackTest"; expected=4 ;;
     expiry) names="ExpiryTest"; expected=2 ;;
     cache) names="CacheEvictionTest,CacheReuseTest"; expected=4 ;;
     *) echo "Unknown hazard group: $group" >&2; exit 2 ;;
@@ -44,4 +44,6 @@ if [ "$status" -ne 0 ] || ! grep -Eq "^OK \($expected tests?\)" "$output/runner.
     exit 1
 else
     printf 'PASSED: %s %s repetition %s, all %s tests\n' "$group" "$variant" "$repetition" "$expected"
+    grep -E 'ServiceAudioObserver.*(expiry responses=|transfer coldBytes=)' \
+        "$output/logcat.txt" | tail -n 20 || true
 fi

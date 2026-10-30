@@ -46,6 +46,8 @@ final class PcmOutput extends ForwardingAudioOutput {
                 if (crossings > 1) {
                     windows.add(new double[] {(firstCrossing + lastCrossing) / 2,
                             (crossings - 1) / (lastCrossing - firstCrossing)});
+                } else {
+                    windows.add(new double[] {(acceptedSamples - samples / 2.0) / sampleRate, Double.NaN});
                 }
                 samples = 0;
                 crossings = 0;

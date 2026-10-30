@@ -19,6 +19,7 @@ and progress coherently. Out-of-duration candidates are skipped. Errors and an
 empty playlist cannot count as recovery. The test accepts original-edition reuse,
 replacement and approximate resume; it does not require cache keys, player
 replacement or one edition across all user seeks.
+Silent windows remain in the fixed sample and cannot identify a passage.
 
 ## Coverage
 
@@ -33,13 +34,13 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 | SameUrlChangeTest | Same URL changes to different-length or equal-length audio |
 | HeadGetDisagreementTest | HEAD and GET select different editions |
 | ReconnectTest | An interrupted response reconnects within playback |
-| RangeFallbackTest | Range is ignored with a full HTTP 200 response, stable or changed |
+| RangeFallbackTest | Range is ignored with a full HTTP 200 response, stable or changed at either length |
 | ExpiryTest | Interrupt an active response after its URL expires; fresh resolution may safely avoid it |
 | CacheEvictionTest | Other episodes evict cached bytes through the production LRU |
 | CacheReuseTest | Stable restart and bounded response-body traffic |
 | PlaybackLifecycleTest | Paused audio, ordinary seeks, replacement, saved position and completed download |
 
-Server, observer and passage-matcher self-checks bring the selection to 44 cases.
+Server, observer and passage-matcher self-checks bring the selection to 47 cases.
 Healthy controls require successful playback, so rejecting every stream cannot
 pass. The data budget permits three warm restarts to transfer at most one cold
 fully buffered preparation's body bytes, including metadata reads but not headers.
@@ -66,6 +67,7 @@ These are fixed sampled-passage checks, not continuous splice validation or proo
 that every timestamp is accessible. They do not cover process death, network
 handoff, partial eviction or an episode larger than the cache. The saved-position
 control checks restoration from the database, not controller-position accuracy.
+Continuity of wall-clock playback across different audio outputs is not measured.
 
 ## Run
 
@@ -90,3 +92,4 @@ CI runs each group three times in separate debug/release jobs without retries.
 The older retry runner excludes these classes. Full runner output and logcat are
 in `playback-hazards-<group>-<variant>-<repetition>` artifacts; failure excerpts
 stay below 200 lines per job. GitHub requires sign-in to download artifacts.
+Successful runs also print expiry exposure and response-body byte totals.

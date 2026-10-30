@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertTrue;
 
@@ -94,34 +95,48 @@ final class ServicePlaybackFixture {
     }
 
     void stopService() throws Exception {
-        if (controller != null) {
-            onMain(() -> controller.pause());
-            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() ->
-                    PlaybackPreferences.getCurrentPlayerStatus() == PlaybackPreferences.PLAYER_STATUS_PAUSED);
-            onMain(() -> {
-                controller.release();
-                controller = null;
-            });
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        }
-        ComponentName service = new ComponentName(context, Media3PlaybackService.class);
-        context.stopService(new Intent().setComponent(service));
-        ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
-        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
-            for (ActivityManager.RunningServiceInfo info : manager.getRunningServices(Integer.MAX_VALUE)) {
-                if (service.equals(info.service)) {
-                    return false;
+        try {
+            if (controller != null) {
+                AtomicBoolean hasMedia = new AtomicBoolean();
+                onMain(() -> {
+                    hasMedia.set(controller.getCurrentMediaItem() != null);
+                    controller.pause();
+                });
+                if (hasMedia.get()) {
+                    Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() ->
+                            PlaybackPreferences.getCurrentPlayerStatus() == PlaybackPreferences.PLAYER_STATUS_PAUSED);
                 }
             }
-            return true;
-        });
-        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
-        FutureTask<Void> databaseIdle = new FutureTask<>(DBWriter::tearDownTests, null);
-        new Thread(databaseIdle, "TestDatabaseBarrier").start();
-        try {
-            databaseIdle.get(5, TimeUnit.SECONDS);
         } finally {
-            databaseIdle.cancel(true);
+            try {
+                if (controller != null) {
+                    onMain(() -> {
+                        controller.release();
+                        controller = null;
+                    });
+                    InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                }
+            } finally {
+                ComponentName service = new ComponentName(context, Media3PlaybackService.class);
+                context.stopService(new Intent().setComponent(service));
+                ActivityManager manager = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+                Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+                    for (ActivityManager.RunningServiceInfo info : manager.getRunningServices(Integer.MAX_VALUE)) {
+                        if (service.equals(info.service)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+                FutureTask<Void> databaseIdle = new FutureTask<>(DBWriter::tearDownTests, null);
+                new Thread(databaseIdle, "TestDatabaseBarrier").start();
+                try {
+                    databaseIdle.get(5, TimeUnit.SECONDS);
+                } finally {
+                    databaseIdle.cancel(true);
+                }
+            }
         }
     }
 

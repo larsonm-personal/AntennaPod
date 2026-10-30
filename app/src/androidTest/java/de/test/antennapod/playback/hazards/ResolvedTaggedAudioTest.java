@@ -21,6 +21,25 @@ import static org.junit.Assert.assertTrue;
 @IgnoreOnCi
 public class ResolvedTaggedAudioTest {
     @Test
+    public void silentWindowsKeepTheirPlaceInTheFixedSample() throws Exception {
+        ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
+        FakeOutput device = new FakeOutput();
+        AudioOutput output = audio.wrap(device.output(), () -> device.position * 44100 / 1000000);
+        ByteBuffer data = sweep(1438);
+        for (int offset = 2 * 44100 * 2; offset < 3 * 44100 * 2; offset += 2) {
+            data.putShort(offset, (short) 0);
+        }
+        output.write(data, 1, 0);
+        output.write(sweep(1488), 1, 4000000);
+        device.position = 5000000;
+        List<ResolvedTaggedAudio.Heard> history = audio.heard();
+        assertEquals(2.125, history.get(8).outputSeconds, 0.025);
+        for (ResolvedTaggedAudio.Heard window : history.subList(8, 12)) {
+            assertEquals("Silent audio is not a program passage", -1, window.edition);
+        }
+    }
+
+    @Test
     public void partialWritesMatchWholeWritesAndExcludeQueuedAudio() throws Exception {
         ResolvedTaggedAudio partial = new ResolvedTaggedAudio();
         FakeOutput device = new FakeOutput();

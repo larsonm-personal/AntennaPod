@@ -229,6 +229,7 @@ public class ResolvedEpisodeServer extends HTTPBin {
                 }
                 if (generation != connectionGeneration) {
                     interruptions.incrementAndGet();
+                    session.getInputStream().close();
                     throw new IOException("Synthetic response disconnection");
                 }
                 int count = source.read(buffer, offset, length);
