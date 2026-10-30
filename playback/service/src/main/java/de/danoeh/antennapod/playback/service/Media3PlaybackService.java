@@ -82,6 +82,7 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.List;
@@ -566,7 +567,11 @@ public class Media3PlaybackService extends MediaLibraryService {
             final boolean playWhenReady = player.getPlayWhenReady();
             replacingStream = true;
             try {
-                player.setMediaItem(currentItem, 0);
+                List<MediaItem> items = new ArrayList<>();
+                for (int index = 0; index < player.getMediaItemCount(); index++) {
+                    items.add(player.getMediaItemAt(index));
+                }
+                player.setMediaItems(items, player.getCurrentMediaItemIndex(), 0);
             } finally {
                 replacingStream = false;
             }
