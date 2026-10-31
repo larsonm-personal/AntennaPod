@@ -67,6 +67,10 @@ repeated audio. The inferred splice timing and audio alignment were not verified
 the byte-length difference does not establish an ad duration or permanent loss.
 Both directions reuse the earlier fixture displacement and the same passage
 assertions. Priming reaches the same media position in either starting edition.
+A second live log that day showed the opposite length change at another cached
+endpoint, followed by a reported forward skip near the inferred join. It reinforces
+the existing longer-to-shorter case, but contains no post-join seeking attempt;
+the skipped duration and any inaccessible content remain unverified.
 
 Same-URL mutation, HEAD/GET disagreement, interruption, expiry and ignored ranges
 are anticipated robustness scenarios, not observations from that incident.
