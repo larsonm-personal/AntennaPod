@@ -7,7 +7,7 @@ package="de.test.antennapod.playback.hazards"
 group="${4:-controls}"
 case "$group" in
     controls) names="support.ResolvedTaggedAudioTest,support.ResolvedEpisodeServerTest,support.PassageOracleTest,PlaybackLifecycleTest"; expected=32 ;;
-    resolution) names="ResolutionChangeTest"; expected=4 ;;
+    resolution) names="ResolutionChangeTest"; expected=5 ;;
     mutation) names="SameUrlChangeTest"; expected=3 ;;
     head-get) names="HeadGetDisagreementTest"; expected=1 ;;
     transport) names="ReconnectTest,RangeFallbackTest"; expected=4 ;;
