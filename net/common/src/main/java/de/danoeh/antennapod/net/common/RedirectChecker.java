@@ -4,6 +4,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import okhttp3.Call;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.internal.http.StatusLine;
@@ -54,6 +55,35 @@ public abstract class RedirectChecker {
     }
 
     @NonNull
+    public static String getFinalUrlOrThrow(@NonNull String url, @Nullable String authorization) throws IOException {
+        Request.Builder request = new Request.Builder().url(url).head();
+        if (authorization != null) {
+            request.header("Authorization", authorization);
+        }
+        try (Response response = AntennapodHttpClient.getHttpClient().newCall(request.build()).execute()) {
+            if (response.code() != HttpURLConnection.HTTP_BAD_METHOD
+                    && response.code() != HttpURLConnection.HTTP_NOT_IMPLEMENTED) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("Resolution failed with HTTP " + response.code());
+                }
+                return response.request().url().toString();
+            }
+        }
+        return getFinalUrlWithGet(request);
+    }
+
+    private static String getFinalUrlWithGet(Request.Builder request) throws IOException {
+        Call call = AntennapodHttpClient.getHttpClient().newCall(request.get().header("Range", "bytes=0-0").build());
+        try (Response response = call.execute()) {
+            call.cancel();
+            if (!response.isSuccessful()) {
+                throw new IOException("Resolution failed with HTTP " + response.code());
+            }
+            return response.request().url().toString();
+        }
+    }
+
+    @NonNull
     public static String getFinalUrl(@NonNull String url) {
         if (TextUtils.isEmpty(url) || !url.startsWith("http")) {
             return url;
@@ -62,6 +92,10 @@ public abstract class RedirectChecker {
             Request httpReq = new Request.Builder().url(url).head().build();
             Response response = AntennapodHttpClient.getHttpClient().newCall(httpReq).execute();
             response.close();
+            if (response.code() == HttpURLConnection.HTTP_BAD_METHOD
+                    || response.code() == HttpURLConnection.HTTP_NOT_IMPLEMENTED) {
+                return getFinalUrlWithGet(httpReq.newBuilder());
+            }
             return response.request().url().toString();
         } catch (IOException e) {
             Log.e(TAG, "Failed to follow redirects for " + url + ": " + e.getMessage());

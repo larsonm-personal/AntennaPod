@@ -47,7 +47,7 @@ public class HTTPBin extends NanoHTTPD {
     private final List<File> servedFiles;
 
     public HTTPBin() {
-        super(0); // Let system pick a free port
+        super("127.0.0.1", 0); // Let system pick a free port
         this.servedFiles = new ArrayList<>();
     }
 
