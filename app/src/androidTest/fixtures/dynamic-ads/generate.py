@@ -1,3 +1,4 @@
+# Generate MP3 sweeps with different ad layouts so playback tests can identify editions and detect missing content.
 import argparse
 import array
 import math
