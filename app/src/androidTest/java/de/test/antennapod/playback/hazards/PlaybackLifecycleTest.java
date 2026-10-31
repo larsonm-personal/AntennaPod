@@ -20,6 +20,7 @@ import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
 import org.awaitility.Awaitility;
 import org.apache.commons.io.IOUtils;
 
@@ -34,10 +35,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Healthy controls for paused audio, seeking, replacement, saved position and completed downloads.
+ * Pause coverage follows AntennaPod #8487; download coverage follows Podverse #1350's streaming-only report.
+ * All pass unfixed; service state and known audio calibrate the harness independently of changed responses.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi
 public class PlaybackLifecycleTest extends PlaybackCase {
+    // Connect without preparing media -> stop -> reconnect -> stop; both stops clear the controller.
     @Test
     public void unpreparedServiceCanBeStoppedAndConnectedAgain() throws Exception {
         try {
@@ -53,6 +60,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         }
     }
 
+    // Prepare A paused -> observe no played PCM -> play and recognize A at media time 80 s.
     @Test
     public void pausedPreparationDoesNotCountQueuedAudio() throws Exception {
         start(false);
@@ -62,6 +70,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         sample(() -> app.controller.play(), 0, 80);
     }
 
+    // Play A at 80 s -> seek to 110, 75 and 80 s -> recognize the corresponding program audio.
     @Test
     public void ordinarySeeksExposeKnownProgramPassages() throws Exception {
         start(false);
@@ -71,6 +80,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         }
     }
 
+    // Play A at 80 s -> select independent B -> recognize B at 80 s.
     @Test
     public void completeEpisodeReplacementExposesBothEditions() throws Exception {
         start(false);
@@ -80,6 +90,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         sample(() -> app.controller.play(), 1, 80);
     }
 
+    // Play A -> pause six seconds -> switch fresh resolution to B -> resume and replay fixed passages.
     @Test
     public void pauseResumeKeepsPassagesReachable() throws Exception {
         start(false);
@@ -95,6 +106,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         checkPassages();
     }
 
+    // Play A -> stop and read saved position -> reconnect/play -> verify normal rewind and replay passages.
     @Test
     public void restartUsesFinalPersistedPositionAndNormalRewind() throws Exception {
         start(false);
@@ -131,6 +143,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
         checkPassages();
     }
 
+    // Download A -> mark it local -> resolve B on the server -> play A with no network body bytes.
     @Test
     public void completedDownloadKeepsPassagesWithoutStreamingAgain() throws Exception {
         start(false);
@@ -153,7 +166,7 @@ public class PlaybackLifecycleTest extends PlaybackCase {
             app.media.setDownloaded(true, System.currentTimeMillis());
             DBWriter.setFeedMedia(app.media).get(5, TimeUnit.SECONDS);
             app.server.switchFreshResolutionsToB();
-            long before = app.server.getBodyBytes();
+            final long before = app.server.getBodyBytes();
             app.connect();
             select(app.media, 80);
             sample(() -> app.controller.play(), 0, 80);

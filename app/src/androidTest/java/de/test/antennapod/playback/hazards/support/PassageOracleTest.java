@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
@@ -15,6 +15,7 @@ import java.util.List;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+// Checks that the passage matcher accepts replacement samples and rejects missing, silent or wrong content.
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi

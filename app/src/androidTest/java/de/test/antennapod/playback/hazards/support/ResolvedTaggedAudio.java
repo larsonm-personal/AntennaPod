@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
@@ -11,8 +11,9 @@ import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
+// Decodes edition and program position from played PCM, retaining evidence across output changes.
 @OptIn(markerClass = UnstableApi.class)
-final class ResolvedTaggedAudio {
+public final class ResolvedTaggedAudio {
     private final List<Heard> finished = new ArrayList<>();
     private Output current;
     private int epoch;
@@ -23,7 +24,7 @@ final class ResolvedTaggedAudio {
         return current;
     }
 
-    synchronized List<Heard> heard() {
+    public synchronized List<Heard> heard() {
         List<Heard> result = new ArrayList<>(finished);
         if (current != null) {
             result.addAll(current.heard());
@@ -31,7 +32,7 @@ final class ResolvedTaggedAudio {
         return result;
     }
 
-    static List<Heard> segment(List<Heard> history, int first, double tolerance) {
+    public static List<Heard> segment(List<Heard> history, int first, double tolerance) {
         assertTrue("Incomplete predetermined segment", history.size() >= first + 4);
         List<Heard> segment = history.subList(first, first + 4);
         Heard anchor = segment.get(0);
@@ -52,9 +53,9 @@ final class ResolvedTaggedAudio {
         long frames();
     }
 
-    static final class Heard {
+    public static final class Heard {
         final int edition;
-        final double program;
+        public final double program;
         final double outputSeconds;
         final int epoch;
 

@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
@@ -17,6 +17,7 @@ import java.util.Arrays;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+// Checks played versus queued PCM, partial writes, output changes, and fixed-segment audio recognition.
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi
 public class ResolvedTaggedAudioTest {

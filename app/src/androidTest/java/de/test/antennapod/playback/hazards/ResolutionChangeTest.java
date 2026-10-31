@@ -10,12 +10,20 @@ import org.awaitility.Awaitility;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
+import de.test.antennapod.playback.hazards.support.ResolvedTaggedAudio;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Fresh resolution selects a shorter B while the resolved A and B URLs remain independently stable.
+ * Michael's captures found a 60.055 s interior displacement; ad placement and sweep bands here are synthetic.
+ * Partially play/cache A -> stop service -> resolve B -> resume and replay fixed program passages.
+ * Unfixed enclosure-keyed caching mixes A/B bytes and misses a passage; the three healthy controls pass.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi
