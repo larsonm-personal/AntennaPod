@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import androidx.test.platform.app.InstrumentationRegistry;
 import org.apache.commons.io.IOUtils;
@@ -33,6 +33,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 
+// Verifies the local server's HTTP bodies, state changes, isolation, and bounded diagnostic history.
 @IgnoreOnCi
 public class ResolvedEpisodeServerTest {
     private final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
@@ -93,7 +94,7 @@ public class ResolvedEpisodeServerTest {
 
     @Test
     public void longRejectedRequestsHaveABoundedDiagnosticByteCost() throws Exception {
-        String name = URLEncoder.encode(StringUtils.repeat("\u754c", 256), "UTF-8");
+        String name = URLEncoder.encode(StringUtils.repeat("界", 256), "UTF-8");
         String range = StringUtils.repeat("x", 512);
         for (int index = 0; index < 100; index++) {
             HttpURLConnection response = open("missing-" + name, "HEAD", range);

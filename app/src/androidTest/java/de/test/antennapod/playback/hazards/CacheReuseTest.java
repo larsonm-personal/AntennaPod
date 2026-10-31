@@ -14,9 +14,17 @@ import de.danoeh.antennapod.storage.preferences.PlaybackPreferences;
 import java.util.concurrent.TimeUnit;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
+import de.test.antennapod.playback.hazards.support.ResolvedTaggedAudio;
 
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Checks partial-cache restart and bounded response-body traffic across fully buffered restarts.
+ * AntennaPod #8487/#8552 motivate reuse; the three-restart byte budget is synthetic engineering coverage.
+ * Replay partial A; separately buffer A -> restart three times -> compare warm bytes with one cold transfer.
+ * Unfixed content playback passes, but uncached chapter scans repeat transfers and exceed the warm budget.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi

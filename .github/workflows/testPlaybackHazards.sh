@@ -60,6 +60,9 @@ for variant in debug release; do
     grep -Fxq "install app/build/outputs/apk/play/$variant/app-play-$variant.apk" "$ADB_CALLS"
     grep -Fxq "install app/build/outputs/apk/androidTest/play/$variant/app-play-$variant-androidTest.apk" "$ADB_CALLS"
 done
+for name in ResolvedTaggedAudioTest ResolvedEpisodeServerTest PassageOracleTest; do
+    grep -Fq "de.test.antennapod.playback.hazards.support.$name" "$ADB_CALLS"
+done
 export MODE=install-error
 echo 0 > "$COUNTER"
 status=0

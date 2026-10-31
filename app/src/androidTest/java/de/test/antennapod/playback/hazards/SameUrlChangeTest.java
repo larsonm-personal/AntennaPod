@@ -7,7 +7,14 @@ import androidx.test.filters.LargeTest;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
 
+/**
+ * The same resolved URL serves a different edition, with either changed or unchanged encoded length.
+ * Synthetic cases informed by Pocket Casts Android #6213 and Shuttle AudioPlaybackKit ADR 0016, not captures.
+ * Cache A -> replace bytes at A -> restart/replay; the equal-length B-only case is a healthy control.
+ * Unfixed playback combines cached A with new B: both mutations miss a required passage; B alone passes.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi

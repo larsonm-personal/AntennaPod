@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.util.UnstableApi;
@@ -10,6 +10,7 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 
+// Measures accepted PCM frequencies and returns only windows behind the supplied playback head.
 @OptIn(markerClass = UnstableApi.class)
 final class PcmOutput extends ForwardingAudioOutput {
     private final List<double[]> windows = new ArrayList<>();

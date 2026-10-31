@@ -23,8 +23,9 @@ Silent windows remain in the fixed sample and cannot identify a passage.
 
 ## Coverage
 
-Tests are grouped in `de.test.antennapod.playback.hazards`. Each class keeps the
-server change, playback action and assertion together. `ResolvedEpisodeServer`
+Scenario tests are in `de.test.antennapod.playback.hazards`; shared fixtures,
+audio analysis and their self-tests are in `hazards.support`. Each scenario keeps
+the server change, playback action and assertion together. `ResolvedEpisodeServer`
 shows the resolution sequence: serve A, wait for the test signal, then resolve B.
 Pacing, mutation, expiry and interruption are explicit, separate controls.
 

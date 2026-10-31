@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import android.app.ActivityManager;
 import android.content.ComponentName;
@@ -38,16 +38,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertTrue;
 
+// Sets up synthetic episodes, the real service/controller, and isolated cache/database cleanup.
 @OptIn(markerClass = UnstableApi.class)
-final class ServicePlaybackFixture {
-    final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
-    Context context;
-    MediaController controller;
+public final class ServicePlaybackFixture {
+    public final ResolvedEpisodeServer server = new ResolvedEpisodeServer();
+    public Context context;
+    public MediaController controller;
     private File initial;
     private File changed;
-    FeedMedia media;
+    public FeedMedia media;
 
-    void setUp(String first, String second) throws Exception {
+    public void setUp(String first, String second) throws Exception {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         stopService();
         deleteCache();
@@ -88,13 +89,13 @@ final class ServicePlaybackFixture {
         }
     }
 
-    void connect() throws Exception {
+    public void connect() throws Exception {
         SessionToken token = new SessionToken(context, new ComponentName(context, Media3PlaybackService.class));
         controller = new MediaController.Builder(context, token).setApplicationLooper(Looper.getMainLooper())
                 .buildAsync().get(30, TimeUnit.SECONDS);
     }
 
-    void stopService() throws Exception {
+    public void stopService() throws Exception {
         try {
             if (controller != null) {
                 AtomicBoolean hasMedia = new AtomicBoolean();
@@ -158,7 +159,7 @@ final class ServicePlaybackFixture {
         return file;
     }
 
-    void onMain(Runnable action) {
+    public void onMain(Runnable action) {
         InstrumentationRegistry.getInstrumentation().runOnMainSync(action);
     }
 }
