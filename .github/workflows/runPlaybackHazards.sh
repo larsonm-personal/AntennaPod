@@ -6,7 +6,7 @@ folder="${2:-app/build/playback-hazards}"
 package="de.test.antennapod.playback.hazards"
 group="${4:-controls}"
 case "$group" in
-    controls) names="ResolvedTaggedAudioTest,ResolvedEpisodeServerTest,PassageOracleTest,PlaybackLifecycleTest"; expected=32 ;;
+    controls) names="support.ResolvedTaggedAudioTest,support.ResolvedEpisodeServerTest,support.PassageOracleTest,PlaybackLifecycleTest"; expected=32 ;;
     resolution) names="ResolutionChangeTest"; expected=4 ;;
     mutation) names="SameUrlChangeTest"; expected=3 ;;
     head-get) names="HeadGetDisagreementTest"; expected=1 ;;

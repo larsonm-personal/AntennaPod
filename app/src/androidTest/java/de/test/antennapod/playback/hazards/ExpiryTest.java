@@ -9,9 +9,16 @@ import androidx.test.filters.LargeTest;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
 
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Retires A with HTTP 403 while fresh resolution selects B; safe avoidance of A is also accepted.
+ * Synthetic expired-link coverage, not behaviour measured in Michael's captures.
+ * Prime A -> expire A and resolve B -> interrupt and seek, or restart -> replay fixed passages.
+ * Unfixed active playback does not re-resolve expired A; a fresh restart instead mixes cached A with B.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi

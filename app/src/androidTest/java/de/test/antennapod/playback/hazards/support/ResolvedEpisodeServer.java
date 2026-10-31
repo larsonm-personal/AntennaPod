@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import de.test.antennapod.util.service.download.HTTPBin;
 import org.apache.commons.lang3.StringUtils;

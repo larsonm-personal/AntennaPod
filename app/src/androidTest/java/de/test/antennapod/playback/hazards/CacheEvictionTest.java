@@ -9,6 +9,7 @@ import androidx.test.filters.LargeTest;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -17,6 +18,12 @@ import java.util.List;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Exercises playback after other episodes evict a partially cached episode from the real 100 MB LRU.
+ * Synthetic cache-pressure coverage; eviction was not measured in Michael's demo.
+ * Prime A -> buffer 26 other episodes -> verify eviction -> replay passages from A or freshly resolved B.
+ * Both cases pass unfixed: with all old spans gone, they cannot mix into replacement audio.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi

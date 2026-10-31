@@ -1,4 +1,4 @@
-package de.test.antennapod.playback.hazards;
+package de.test.antennapod.playback.hazards.support;
 
 import android.media.AudioFormat;
 import android.util.Log;
@@ -42,11 +42,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+// Drives the real playback service and checks fixed program passages in consumed audio.
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 public abstract class PlaybackCase {
-    final ServicePlaybackFixture app = new ServicePlaybackFixture();
-    final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
+    protected final ServicePlaybackFixture app = new ServicePlaybackFixture();
+    protected final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
     private final List<PlayerMessage> messages = new ArrayList<>();
     private boolean initialized;
     private ExoPlayer observedPlayer;
@@ -67,15 +68,15 @@ public abstract class PlaybackCase {
         }
     }
 
-    void start(boolean identical) throws Exception {
+    protected void start(boolean identical) throws Exception {
         start(identical, 80, false);
     }
 
-    void start(boolean identical, int position, boolean partial) throws Exception {
+    protected void start(boolean identical, int position, boolean partial) throws Exception {
         start(identical ? "tagged-a.mp3" : "tagged-b.mp3", position, partial);
     }
 
-    void start(String second, int position, boolean partial) throws Exception {
+    protected void start(String second, int position, boolean partial) throws Exception {
         initialized = true;
         app.setUp("tagged-a.mp3", second);
         if (!partial) {
@@ -88,12 +89,12 @@ public abstract class PlaybackCase {
         select(app.media, position);
     }
 
-    void primeCachedEpisode(boolean equalLength) throws Exception {
+    protected void primeCachedEpisode(boolean equalLength) throws Exception {
         primePlayback(equalLength);
         app.stopService();
     }
 
-    void primePlayback(boolean equalLength) throws Exception {
+    protected void primePlayback(boolean equalLength) throws Exception {
         start(equalLength ? "tagged-equal-length.mp3" : "tagged-b.mp3", 70, true);
         sample(() -> app.controller.play(), 0, 70);
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
@@ -103,7 +104,7 @@ public abstract class PlaybackCase {
         });
     }
 
-    void restartAndCheckPassages() throws Exception {
+    protected void restartAndCheckPassages() throws Exception {
         app.server.resumeResponses();
         app.connect();
         int first = audio.heard().size();
@@ -112,7 +113,7 @@ public abstract class PlaybackCase {
         checkPassages();
     }
 
-    void checkPassages() {
+    protected void checkPassages() {
         for (int replay = 0; replay < 2; replay++) {
             for (int program : new int[] {75, 105, 90}) {
                 boolean reached = reaches(program);
@@ -123,7 +124,7 @@ public abstract class PlaybackCase {
         }
     }
 
-    void select(FeedMedia media, int position) {
+    protected void select(FeedMedia media, int position) {
         app.onMain(() -> {
             app.controller.pause();
             app.controller.setMediaItem(MediaItemAdapter.fromMediaIdStub(media.getId()));
@@ -133,8 +134,9 @@ public abstract class PlaybackCase {
         app.onMain(() -> app.controller.seekTo(position * 1000L));
     }
 
-    FeedMedia addEpisode(String route) {
-        Feed feed = new Feed(app.server.getBaseUrl() + "/" + route + "-feed", null, "Synthetic second feed", null, null);
+    protected FeedMedia addEpisode(String route) {
+        Feed feed = new Feed(app.server.getBaseUrl() + "/" + route + "-feed", null,
+                "Synthetic second feed", null, null);
         FeedItem item = new FeedItem(0, "Synthetic second episode", route, null, new Date(),
                 FeedItem.UNPLAYED, feed);
         FeedMedia media = new FeedMedia(item, app.server.getBaseUrl() + "/resolved-ad/" + route, 0, "audio/mpeg");
@@ -150,7 +152,7 @@ public abstract class PlaybackCase {
         return media;
     }
 
-    void awaitFullyBuffered() {
+    protected void awaitFullyBuffered() {
         AtomicBoolean buffered = new AtomicBoolean();
         try {
             Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
@@ -167,7 +169,7 @@ public abstract class PlaybackCase {
         }
     }
 
-    void awaitReady() {
+    protected void awaitReady() {
         AtomicBoolean ready = new AtomicBoolean();
         try {
             Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
@@ -184,7 +186,7 @@ public abstract class PlaybackCase {
         }
     }
 
-    void seekAndSample(int target) {
+    protected void seekAndSample(int target) {
         seekStart = -1;
         requestedSeek = target * 1000L;
         app.onMain(() -> app.controller.seekTo(target * 1000L));
@@ -192,13 +194,13 @@ public abstract class PlaybackCase {
         measure(seekStart, 0, target);
     }
 
-    void sample(Runnable action, int edition, int target) {
+    protected void sample(Runnable action, int edition, int target) {
         int first = audio.heard().size();
         app.onMain(action);
         measure(first, edition, target);
     }
 
-    boolean reaches(int program) {
+    protected boolean reaches(int program) {
         for (double ad : new double[] {2, 2 + 2299 * 1152.0 / 44100}) {
             long target = Math.round((program + ad) * 1000);
             AtomicLong duration = new AtomicLong();
@@ -242,7 +244,7 @@ public abstract class PlaybackCase {
         return true;
     }
 
-    List<ResolvedTaggedAudio.Heard> sampledContent(int first, boolean allowUnavailable) {
+    protected List<ResolvedTaggedAudio.Heard> sampledContent(int first, boolean allowUnavailable) {
         try {
             Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> audio.heard().size() >= first + 12);
         } catch (ConditionTimeoutException unavailable) {

@@ -7,9 +7,16 @@ import androidx.test.filters.LargeTest;
 import org.junit.Test;
 
 import de.test.antennapod.IgnoreOnCi;
+import de.test.antennapod.playback.hazards.support.PlaybackCase;
 
 import static org.junit.Assert.assertTrue;
 
+/**
+ * Interrupted HTTP/1.1 responses must resume without losing access to program content.
+ * Synthetic interruption inspired by Pocket Casts Android #5869, not its reported HTTP/2 END_STREAM failure.
+ * Partially play A -> disconnect its active responses -> resume serving A -> replay named passages.
+ * This already passes unfixed: the resumed bytes belong to the same edition.
+ */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
 @IgnoreOnCi
