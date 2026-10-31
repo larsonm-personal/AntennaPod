@@ -30,10 +30,10 @@ for MODE in pass fail-first missing missing-code wrong-count empty command-error
         *) test -s "$output/runner.txt" ;;
     esac
     case "$MODE" in
-        command-error) expected=7 ;;
-        interrupted) expected=143 ;;
-        timed-out) expected=124 ;;
-        *) expected=0 ;;
+        command-error) expected=7 ;; # injected fixture exit status
+        interrupted) expected=143 ;; # 128 + SIGTERM (15)
+        timed-out) expected=124 ;; # timeout deadline exceeded
+        *) expected=0 ;; # command succeeded
     esac
     test "$(cat "$output/command-status.txt")" = "$expected"
     test -s "$output/logcat.txt"
