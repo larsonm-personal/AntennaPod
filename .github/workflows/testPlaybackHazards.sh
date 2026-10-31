@@ -67,4 +67,51 @@ bash .github/workflows/installPlaybackHazards.sh debug "$folder/install-error" >
 test "$status" = 9
 test "$(cat "$COUNTER")" = 0
 test ! -e "$folder/install-error/repetition-1/runner.txt"
+for MODE in readiness-delayed readiness-never install-retry install-retry-long-failure install-exhausted \
+        install-both-transient install-signature install-malformed install-near-match install-diagnostic-timeout fail-first; do
+    export MODE
+    echo 0 > "$COUNTER"
+    : > "$ADB_CALLS"
+    status=0
+    started=$SECONDS
+    bash .github/workflows/installPlaybackHazards.sh debug "$folder/setup-$MODE" > "$folder/setup-$MODE.txt" || status=$?
+    setup="$folder/setup-$MODE/repetition-1/setup"
+    test "$(wc -l < "$folder/setup-$MODE.txt")" -le 200
+    case "$MODE" in
+        readiness-delayed|install-retry) test "$status" = 0; test "$(cat "$COUNTER")" = 1 ;;
+        readiness-never) test "$status" = 124; test "$(cat "$COUNTER")" = 0; test $((SECONDS - started)) -lt 40 ;;
+        fail-first|install-retry-long-failure) test "$status" = 1; test "$(cat "$COUNTER")" = 1 ;;
+        *) test "$status" = 1; test "$(cat "$COUNTER")" = 0 ;;
+    esac
+    case "$MODE" in
+        readiness-delayed) grep -q 'not ready' "$setup/app-1-readiness.txt"; grep -q '^package:' "$setup/app-1-readiness.txt" ;;
+        readiness-never) test ! -e "$setup/app-1-install.txt"; test -s "$setup/app-1-logcat.txt" ;;
+        install-retry|install-retry-long-failure|install-exhausted|install-both-transient)
+            test "$(cat "$setup/app-1-install-status.txt")" = 1
+            grep -q 'Broken pipe (32)' "$setup/app-1-install.txt"
+            test -s "$setup/app-1-logcat.txt"
+            grep -Fxq 'install -r app/build/outputs/apk/play/debug/app-play-debug.apk' "$ADB_CALLS"
+            if [ "$MODE" != install-exhausted ]; then
+                test "$(cat "$setup/app-2-install-status.txt")" = 0
+                test ! -e "$setup/tests-2-install-status.txt"
+                if [ "$MODE" = install-both-transient ]; then
+                    test "$(cat "$setup/tests-1-install-status.txt")" = 1
+                else
+                    test "$(cat "$setup/tests-1-install-status.txt")" = 0
+                fi
+                test "$(grep -c '^install ' "$ADB_CALLS")" = 3
+                test "$(grep -c '^shell cmd package path android$' "$ADB_CALLS")" = 3
+            else
+                test "$(cat "$setup/app-2-install-status.txt")" = 1
+                test "$(grep -c '^install ' "$ADB_CALLS")" = 2
+            fi ;;
+        install-signature|install-malformed|install-near-match|install-diagnostic-timeout) test "$(grep -c '^install ' "$ADB_CALLS")" = 1 ;;
+        fail-first) test "$(grep -c '^install ' "$ADB_CALLS")" = 2 ;;
+    esac
+    if [ "$MODE" = install-retry-long-failure ]; then test "$(wc -l < "$setup/app-1-install.txt")" = 501; fi
+    if [ "$MODE" = install-diagnostic-timeout ]; then
+        test "$(cat "$setup/app-1-logcat-status.txt")" = 124
+        test $((SECONDS - started)) -lt 20
+    fi
+done
 echo 'Hazard runner controls passed'
