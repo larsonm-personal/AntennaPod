@@ -19,10 +19,10 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Fresh resolution selects a shorter B while the resolved A and B URLs remain independently stable.
- * Michael's captures found a 60.055 s interior displacement; ad placement and sweep bands here are synthetic.
+ * Fresh resolution selects a shorter or longer edition; both resolved URLs remain independently stable.
+ * Earlier captures measured a 60.055 s displacement; an Oct 31 live log prompted the reverse synthetic case.
  * Partially play/cache A -> stop service -> resolve B -> resume and replay fixed program passages.
- * Unfixed enclosure-keyed caching mixes A/B bytes and misses a passage; the three healthy controls pass.
+ * Enclosure-keyed caching can mix editions; the fixed replay checks passage access, not an inaudible transition.
  */
 @LargeTest
 @OptIn(markerClass = UnstableApi.class)
@@ -30,12 +30,22 @@ import static org.junit.Assert.assertTrue;
 public class ResolutionChangeTest extends PlaybackCase {
     @Test
     public void freshResolutionKeepsNamedPassagesReachableThroughServiceRestart() throws Exception {
-        start(false, 70, true);
-        sample(() -> app.controller.play(), 0, 70);
+        checkResolutionChange("tagged-a.mp3", "tagged-b.mp3", 0);
+    }
+
+    @Test
+    public void longerFreshResolutionKeepsNamedPassagesReachableThroughServiceRestart() throws Exception {
+        checkResolutionChange("tagged-b.mp3", "tagged-a.mp3", 1);
+    }
+
+    private void checkResolutionChange(String firstEdition, String secondEdition, int edition) throws Exception {
+        start(firstEdition, secondEdition, 70, true);
+        sample(() -> app.controller.play(), edition, 70);
+        double primedProgram = 25 + (edition == 1 ? 2299 * 1152.0 / 44100 : 0);
         Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
             List<ResolvedTaggedAudio.Heard> heard = audio.heard();
             return app.server.hasSentPrefix() && !heard.isEmpty()
-                    && heard.get(heard.size() - 1).program >= 25;
+                    && heard.get(heard.size() - 1).program >= primedProgram;
         });
         app.stopService();
         app.server.switchFreshResolutionsToB();

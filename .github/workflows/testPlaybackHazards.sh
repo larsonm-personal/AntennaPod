@@ -45,6 +45,9 @@ done
 export MODE=pass EXPECTED_TESTS=3
 bash .github/workflows/runPlaybackHazards.sh debug "$folder/group" 1 mutation > "$folder/group.txt"
 grep -q 'all 3 tests' "$folder/group.txt"
+export EXPECTED_TESTS=5
+bash .github/workflows/runPlaybackHazards.sh debug "$folder/resolution" 1 resolution > "$folder/resolution.txt"
+grep -q 'all 5 tests' "$folder/resolution.txt"
 export MODE=fail-first EXPECTED_TESTS=32
 echo 0 > "$COUNTER"
 if bash .github/workflows/runPlaybackHazards.sh debug "$folder/retained" 1 > "$folder/first.txt"; then exit 1; fi
