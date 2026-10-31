@@ -60,20 +60,18 @@ frames (60.055510204 seconds). The fixture uses that displacement, but its singl
 shortened interval and placement are synthetic. Different sweep bands identify
 editions; they do not model the shared program bytes in those captures.
 
-An Oct 31, 2026 live playback log prompted the reverse-direction case: a new
-resolved URL returned a larger total at the exact endpoint of earlier cached
-reads, while the player timeline advanced normally and the listener reported
-repeated audio. The inferred splice timing and audio alignment were not verified;
-the byte-length difference does not establish an ad duration or permanent loss.
-Both directions reuse the earlier fixture displacement and the same passage
-assertions. Priming reaches the same media position in either starting edition.
-A second live log that day showed the opposite length change at another cached
-endpoint, followed by a reported forward skip near the inferred join. It reinforces
-the existing longer-to-shorter case, but contains no post-join seeking attempt;
-the skipped duration and any inaccessible content remain unverified.
+Oct 31, 2026 live logs prompted the reverse-direction case: new resolved URLs
+returned larger and smaller totals at exact earlier cached endpoints, while
+the listener reported repeats/skips without corresponding timeline jumps. A later
+rewind replayed across the inferred join without a recorded new stream open, and
+the listener still reported missing content. The [detailed study](live-playback-evidence.md)
+separates those observations from unverified audio alignment and permanent loss.
+Both directions retain the earlier fixture displacement and passage assertions,
+with equivalent priming positions. Local rewind across the join remains a specific
+coverage gap: omissions outside the fixed passage samples can escape this oracle.
 
 Same-URL mutation, HEAD/GET disagreement, interruption, expiry and ignored ranges
-are anticipated robustness scenarios, not observations from that incident.
+are anticipated robustness scenarios, not observations from these live logs.
 Expiry coverage records actual 403 responses separately from safe avoidance;
 the latter is successful playback, not evidence of recovery after a 403.
 The [research survey](https://github.com/larsonm-personal/AntennaPod/blob/playback-skip-repro-readiness/scripts/podcast-streaming-survey.md)
