@@ -31,7 +31,7 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 
 | Class | Scenario |
 | --- | --- |
-| ResolutionChangeTest | Fresh resolution changes to a shorter edition; original/replacement and identical-byte controls |
+| ResolutionChangeTest | Fresh resolution changes to a shorter or longer edition; the longer case was added after the Oct 31 live log; original/replacement and identical-byte controls |
 | SameUrlChangeTest | Same URL changes to different-length or equal-length audio |
 | HeadGetDisagreementTest | HEAD and GET select different editions |
 | ReconnectTest | An interrupted response reconnects within playback |
@@ -41,7 +41,7 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 | CacheReuseTest | Stable restart and bounded response-body traffic |
 | PlaybackLifecycleTest | Paused audio, ordinary seeks, replacement, saved position and completed download |
 
-Server, observer and passage-matcher self-checks bring the selection to 50 cases.
+Server, observer and passage-matcher self-checks bring the selection to 51 cases.
 Healthy controls require successful playback, so rejecting every stream cannot
 pass. The data budget permits three warm restarts to transfer at most one cold
 fully buffered preparation's body bytes, including metadata reads but not headers.
@@ -59,6 +59,14 @@ a shorter B; two interior B samples matched later encoded audio in A by 2,299 MP
 frames (60.055510204 seconds). The fixture uses that displacement, but its single
 shortened interval and placement are synthetic. Different sweep bands identify
 editions; they do not model the shared program bytes in those captures.
+
+An Oct 31, 2026 live playback log prompted the reverse-direction case: a new
+resolved URL returned a larger total at the exact endpoint of earlier cached
+reads, while the player timeline advanced normally and the listener reported
+repeated audio. The inferred splice timing and audio alignment were not verified;
+the byte-length difference does not establish an ad duration or permanent loss.
+Both directions reuse the earlier fixture displacement and the same passage
+assertions. Priming reaches the same media position in either starting edition.
 
 Same-URL mutation, HEAD/GET disagreement, interruption, expiry and ignored ranges
 are anticipated robustness scenarios, not observations from that incident.

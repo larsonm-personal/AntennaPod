@@ -77,8 +77,12 @@ public abstract class PlaybackCase {
     }
 
     protected void start(String second, int position, boolean partial) throws Exception {
+        start("tagged-a.mp3", second, position, partial);
+    }
+
+    protected void start(String first, String second, int position, boolean partial) throws Exception {
         initialized = true;
-        app.setUp("tagged-a.mp3", second);
+        app.setUp(first, second);
         if (!partial) {
             app.server.resumeResponses();
         }

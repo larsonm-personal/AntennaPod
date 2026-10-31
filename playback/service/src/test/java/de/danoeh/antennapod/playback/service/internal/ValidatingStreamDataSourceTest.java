@@ -651,8 +651,18 @@ public class ValidatingStreamDataSourceTest {
 
     @Test
     public void changedTotalIsRejectedBeforeAnyBytesAreReadOrMetadataUpdated() throws Exception {
+        checkChangedTotal(900);
+    }
+
+    // The Oct 31 live log also showed a larger response continuing at the old cached endpoint.
+    @Test
+    public void growingTotalIsRejectedBeforeAnyBytesAreReadOrMetadataUpdated() throws Exception {
+        checkChangedTotal(1100);
+    }
+
+    private void checkChangedTotal(int total) throws Exception {
         when(upstream.getResponseHeaders()).thenReturn(Collections.singletonMap(
-                "Content-Range", Collections.singletonList("bytes 100-199/900")));
+                "Content-Range", Collections.singletonList("bytes 100-199/" + total)));
         ValidatingStreamDataSource.ChangedException error = assertThrows(
                 ValidatingStreamDataSource.ChangedException.class, () -> source.open(spec));
         assertFalse(error.needsResolution);
