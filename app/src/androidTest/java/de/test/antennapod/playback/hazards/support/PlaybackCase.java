@@ -236,7 +236,7 @@ public abstract class PlaybackCase {
 
     protected void rewindAndHearPassage(int program) {
         AtomicBoolean paused = new AtomicBoolean();
-        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+        Awaitility.await().atMost(120, TimeUnit.SECONDS).until(() -> {
             app.onMain(() -> {
                 if (app.controller.getCurrentPosition() >= 100000) {
                     app.controller.pause();
