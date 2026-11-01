@@ -25,7 +25,10 @@ public class BasicAuthorizationInterceptor implements Interceptor {
 
         Response response = chain.proceed(request);
 
-        if (response.code() != HttpURLConnection.HTTP_UNAUTHORIZED) {
+        if (response.code() != HttpURLConnection.HTTP_UNAUTHORIZED
+                || !request.url().scheme().equals(response.request().url().scheme())
+                || !request.url().host().equals(response.request().url().host())
+                || request.url().port() != response.request().url().port()) {
             return response;
         }
 

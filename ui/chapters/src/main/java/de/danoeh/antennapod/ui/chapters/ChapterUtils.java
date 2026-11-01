@@ -239,6 +239,23 @@ public class ChapterUtils {
             return new CountingInputStream(new BufferedInputStream(context.getContentResolver().openInputStream(uri)));
         } else {
             Request request = new Request.Builder().url(playable.getStreamUrl()).build();
+            try (Response probe = AntennapodHttpClient.getHttpClient().newCall(request.newBuilder()
+                    .header("Range", "bytes=0-63").build()).execute()) {
+                if (probe.body() == null || !probe.isSuccessful()) {
+                    throw new IOException("Could not read chapter header");
+                }
+                MediaFormatDetector.Result detection = MediaFormatDetector.detect(probe.body().byteStream());
+                if (detection.format == MediaFormatDetector.Format.MPEG_AUDIO) {
+                    return new CountingInputStream(new ByteArrayInputStream(detection.bytes));
+                }
+                request = probe.request().newBuilder().removeHeader("Range").build();
+                byte[] header = detection.bytes;
+                if (detection.format == MediaFormatDetector.Format.ID3 && header.length >= 10
+                        && (header[6] | header[7] | header[8] | header[9]) >= 0) {
+                    int size = (header[6] << 21) | (header[7] << 14) | (header[8] << 7) | header[9];
+                    request = request.newBuilder().header("Range", "bytes=0-" + (size + 9)).build();
+                }
+            }
             Response response = AntennapodHttpClient.getHttpClient().newCall(request).execute();
             if (response.body() == null) {
                 throw new IOException("Body is null");
