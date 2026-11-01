@@ -75,6 +75,7 @@ public final class ResolvedTaggedAudio {
         private PcmOutput pcm;
         private final PlaybackHead playbackHead;
         private long lastPosition;
+        private long stoppedPosition = -1;
 
         Output(AudioOutput delegate, PlaybackHead playbackHead) {
             super(delegate);
@@ -91,7 +92,7 @@ public final class ResolvedTaggedAudio {
         }
 
         List<Heard> heard() {
-            long frames = playbackHead.frames();
+            long frames = stoppedPosition >= 0 ? stoppedPosition : playbackHead.frames();
             assertTrue("Playback head regressed without flush: previous=" + lastPosition + " current=" + frames,
                     frames >= lastPosition);
             lastPosition = frames;
@@ -108,12 +109,23 @@ public final class ResolvedTaggedAudio {
         }
 
         @Override
+        public void stop() {
+            synchronized (ResolvedTaggedAudio.this) {
+                if (stoppedPosition < 0) {
+                    stoppedPosition = playbackHead.frames();
+                }
+                pcm.stop();
+            }
+        }
+
+        @Override
         public void flush() {
             synchronized (ResolvedTaggedAudio.this) {
                 finish();
                 pcm.flush();
                 pcm = new PcmOutput(delegate);
                 lastPosition = 0;
+                stoppedPosition = -1;
             }
         }
 

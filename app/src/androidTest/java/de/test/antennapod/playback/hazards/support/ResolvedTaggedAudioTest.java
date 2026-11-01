@@ -22,6 +22,24 @@ import static org.junit.Assert.assertTrue;
 @IgnoreOnCi
 public class ResolvedTaggedAudioTest {
     @Test
+    public void stopRetainsMeasuredFramesWithoutCountingQueuedTail() throws Exception {
+        ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
+        FakeOutput device = new FakeOutput();
+        AudioOutput output = audio.wrap(device.output(), () -> device.position * 44100 / 1000000);
+        output.write(sweep(500), 1, 0);
+        device.position = 2000000;
+        output.stop();
+        assertEquals(0, device.position);
+        assertEquals(7, audio.heard().size());
+        output.stop();
+        output.flush();
+        output.write(sweep(3500), 1, 0);
+        device.position = 2000000;
+        output.release();
+        assertEquals(14, audio.heard().size());
+    }
+
+    @Test
     public void silentWindowsKeepTheirPlaceInTheFixedSample() throws Exception {
         ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
         FakeOutput device = new FakeOutput();
@@ -181,6 +199,7 @@ public class ResolvedTaggedAudioTest {
                                 ByteBuffer buffer = (ByteBuffer) arguments[0];
                                 buffer.position(buffer.position() + Math.min(limit, buffer.remaining()));
                                 return !buffer.hasRemaining();
+                            case "stop":
                             case "flush":
                                 position = 0;
                                 return null;

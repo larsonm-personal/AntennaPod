@@ -55,7 +55,7 @@ case "$MODE" in
     fail-first)
         if [ "$number" = 1 ]; then
             echo 'FAILURES!!!'
-            echo 'Tests run: 32, Failures: 1'
+            echo 'Tests run: 34, Failures: 1'
             exit 0
         fi ;;
     command-error) echo 'Synthetic transport failure' >&2; exit 7 ;;
@@ -63,11 +63,11 @@ case "$MODE" in
     timed-out) exit 124 ;;
     empty) exit 0 ;;
     missing) echo 'INSTRUMENTATION_FAILED: unavailable'; exit 0 ;;
-    missing-code) echo 'OK (32 tests)'; exit 0 ;;
+    missing-code) echo 'OK (34 tests)'; exit 0 ;;
     wrong-count) echo 'OK (31 tests)'; echo 'INSTRUMENTATION_CODE: -1'; exit 0 ;;
     long-failure|install-retry-long-failure)
         for line in $(seq 1 500); do echo "Synthetic failure line $line"; done
         exit 0 ;;
 esac
-echo "OK (${EXPECTED_TESTS:-32} tests)"
+echo "OK (${EXPECTED_TESTS:-34} tests)"
 echo 'INSTRUMENTATION_CODE: -1'

@@ -21,6 +21,12 @@ replacement and approximate resume; it does not require cache keys, player
 replacement or one edition across all user seeks.
 Silent windows remain in the fixed sample and cannot identify a passage.
 
+The short-rewind case instead listens forward without further seeks after three
+ten-second rewinds. It considers every consumed window until eight consecutive
+windows identify the two-second passage near program second 75, within a fixed
+120-second observation budget. Either edition and a recovery repeat are allowed;
+missing or silent windows cannot be dropped to assemble the passage.
+
 ## Coverage
 
 Scenario tests are in `de.test.antennapod.playback.hazards`; shared fixtures,
@@ -32,6 +38,7 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 | Class | Scenario |
 | --- | --- |
 | ResolutionChangeTest | Fresh resolution changes to a shorter or longer edition; the longer case was added after the Oct 31 live log; original/replacement and identical-byte controls |
+| ShortRewindTest | Replay across a cached join after short backward seeks, prompted by the Oct 31 rewind log; coherent A and B controls |
 | SameUrlChangeTest | Same URL changes to different-length or equal-length audio |
 | HeadGetDisagreementTest | HEAD and GET select different editions |
 | ReconnectTest | An interrupted response reconnects within playback |
@@ -41,7 +48,7 @@ Pacing, mutation, expiry and interruption are explicit, separate controls.
 | CacheReuseTest | Stable restart and bounded response-body traffic |
 | PlaybackLifecycleTest | Paused audio, ordinary seeks, replacement, saved position and completed download |
 
-Server, observer and passage-matcher self-checks bring the selection to 51 cases.
+Server, observer and passage-matcher self-checks bring the selection to 56 cases.
 Healthy controls require successful playback, so rejecting every stream cannot
 pass. The data budget permits three warm restarts to transfer at most one cold
 fully buffered preparation's body bytes, including metadata reads but not headers.
@@ -67,8 +74,8 @@ rewind replayed across the inferred join without a recorded new stream open, and
 the listener still reported missing content. The [detailed study](live-playback-evidence.md)
 separates those observations from unverified audio alignment and permanent loss.
 Both directions retain the earlier fixture displacement and passage assertions,
-with equivalent priming positions. Local rewind across the join remains a specific
-coverage gap: omissions outside the fixed passage samples can escape this oracle.
+with equivalent priming positions. The separate short-rewind case addresses the
+study's local replay gap for one predetermined passage, using the same fixtures.
 
 Same-URL mutation, HEAD/GET disagreement, interruption, expiry and ignored ranges
 are anticipated robustness scenarios, not observations from these live logs.
@@ -77,11 +84,14 @@ the latter is successful playback, not evidence of recovery after a 403.
 The [research survey](https://github.com/larsonm-personal/AntennaPod/blob/playback-skip-repro-readiness/scripts/podcast-streaming-survey.md)
 records related streaming/download reports, length checks and join validation.
 
-These are fixed sampled-passage checks, not continuous splice validation or proof
-that every timestamp is accessible. They do not cover process death, network
+These are named-passage checks, not sample-perfect splice validation or proof
+that every timestamp is accessible. Even the continuous replay checks one target,
+not every possible missing passage. They do not cover process death, network
 handoff, partial eviction or an episode larger than the cache. The saved-position
 control checks restoration from the database, not controller-position accuracy.
 Continuity of wall-clock playback across different audio outputs is not measured.
+At output stop, the observer preserves the last measured playback head before
+Android resets it; the remaining queued tail is not credited as consumed audio.
 
 ## Run
 
