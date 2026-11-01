@@ -234,6 +234,75 @@ public abstract class PlaybackCase {
         return false;
     }
 
+    protected void rewindAndHearPassage(int program) {
+        AtomicBoolean paused = new AtomicBoolean();
+        Awaitility.await().atMost(60, TimeUnit.SECONDS).until(() -> {
+            app.onMain(() -> {
+                if (app.controller.getCurrentPosition() >= 100000) {
+                    app.controller.pause();
+                    paused.set(true);
+                }
+            });
+            return paused.get();
+        });
+        logState("before short rewind");
+        for (int tap = 0; tap < 3; tap++) {
+            seekStart = -1;
+            app.onMain(() -> {
+                requestedSeek = app.controller.getCurrentPosition() - 10000;
+                app.controller.seekTo(requestedSeek);
+            });
+            Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> seekStart >= 0);
+            logState("short rewind " + (tap + 1));
+        }
+        int first = seekStart;
+        app.onMain(() -> app.controller.play());
+        try {
+            Awaitility.await().atMost(120, TimeUnit.SECONDS).until(() -> {
+                List<ResolvedTaggedAudio.Heard> history = audio.heard();
+                return containsPassage(history.subList(first, history.size()), program);
+            });
+        } catch (ConditionTimeoutException unavailable) {
+            throw new AssertionError("Program passage " + program + " missing after short rewind replay", unavailable);
+        } finally {
+            app.onMain(() -> app.controller.pause());
+            List<ResolvedTaggedAudio.Heard> history = audio.heard();
+            for (int index = first; index < history.size(); index++) {
+                ResolvedTaggedAudio.Heard window = history.get(index);
+                Log.i("ServiceAudioObserver", "replay sample=" + index + " epoch=" + window.epoch + " edition="
+                        + window.edition + " program=" + window.program + " output=" + window.outputSeconds);
+                if (index > first) {
+                    ResolvedTaggedAudio.Heard previous = history.get(index - 1);
+                    if (window.edition != previous.edition || Math.abs(window.program - previous.program - 0.25) > 1) {
+                        Log.i("ServiceAudioObserver", "programTarget=" + program + " replay transition="
+                                + previous.edition + ":" + previous.program + " -> "
+                                + window.edition + ":" + window.program);
+                    }
+                }
+            }
+            logState("programTarget=" + program + " replayWindows=" + (history.size() - first)
+                    + " heard=" + containsPassage(history.subList(first, history.size()), program));
+        }
+    }
+
+    static boolean containsPassage(List<ResolvedTaggedAudio.Heard> history, int program) {
+        int consecutive = 0;
+        double anchor = 0;
+        for (ResolvedTaggedAudio.Heard window : history) {
+            if (window.edition >= 0 && consecutive > 0
+                    && Math.abs(window.program - anchor - consecutive * 0.25) < 0.25) {
+                if (++consecutive == 8) {
+                    return true;
+                }
+            } else {
+                consecutive = window.edition >= 0 && window.program >= program && window.program < program + 0.25
+                        ? 1 : 0;
+                anchor = window.program;
+            }
+        }
+        return false;
+    }
+
     static boolean matchesPassage(List<ResolvedTaggedAudio.Heard> segment, int program) {
         if (segment.size() != 4) {
             return false;
