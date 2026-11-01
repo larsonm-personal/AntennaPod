@@ -38,6 +38,9 @@ android {
             shrinkResources true
             signingConfig signingConfigs.releaseConfig
             testProguardFiles "proguard-test.cfg"
+            if (project.findProperty("testBuildType") == "release") {
+                proguardFiles "src/androidTest/proguard.cfg"
+            }
         }
     }
 
@@ -53,6 +56,27 @@ android {
 
     androidResources {
         additionalParameters += ["--no-version-vectors"]
+    }
+}
+
+abstract class GeneratePlaybackFixtures extends Exec {
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+}
+
+def generatePlaybackFixtures = tasks.register("generatePlaybackFixtures", GeneratePlaybackFixtures) {
+    def generator = layout.projectDirectory.file("src/androidTest/fixtures/dynamic-ads/generate.py")
+    inputs.file(generator)
+    outputDirectory.set(layout.buildDirectory.dir("generated/playbackFixtures"))
+    commandLine providers.gradleProperty("fixturePython").getOrElse("python3"),
+            generator.asFile, outputDirectory.dir("dynamic-ads").get().asFile
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.androidTest?.sources?.assets?.addGeneratedSourceDirectory(generatePlaybackFixtures) {
+            it.outputDirectory
+        }
     }
 }
 
@@ -130,6 +154,7 @@ dependencies {
 
     androidTestImplementation libs.awaitility
     androidTestImplementation libs.nanohttpd
+    androidTestImplementation libs.androidx.media3.exoplayer
     androidTestImplementation libs.androidx.test.espresso.core
     androidTestImplementation libs.androidx.test.espresso.contrib
     androidTestImplementation libs.androidx.test.espresso.intents
