@@ -110,7 +110,7 @@ unchanged proposed fix passes them in debug; the new reverse case also fails
 unfixed and passes fixed in release. These are synthetic reproductions of the
 mechanism, not replays of the private episode.
 
-There is a material coverage gap. The test seeks to fixed candidate locations
+The original study identified a material coverage gap. That test seeks to fixed candidate locations
 and checks a one-second sample beginning two seconds after each seek marker.
 It does not perform the user's five rewind taps and continuously verify content
 through the original buffered join. The initial post-restart observation is not
@@ -118,11 +118,26 @@ a continuous-content assertion. A shorter omitted passage outside the fixed
 targets or sample windows could escape this oracle. Passing all current passage
 checks therefore does not prove that every local rewind across a join is safe.
 
-The smallest useful follow-up would separately replay a predetermined program
-interval spanning a staged join, then require a named passage inside that interval
-to be heard after rewind. It must permit a legitimate fresh source and approximate
-resume shift, retain consumed-audio evidence, and avoid choosing its target after
-seeing a failure. This remains proposed coverage, not an implemented test.
+`ShortRewindTest` is the targeted follow-up. It primes the longer A, restarts after
+fresh resolution changes to B, lets playback reach media second 100, then issues
+three ten-second backward seeks and listens forward without further seeks. The
+rewind is shorter than the five taps in the live trace so the existing fixtures
+can exercise both coherent editions within a bounded observation. Both media
+100 and the resulting position near 70 are inside both files.
+
+The fixed target is the two-second passage near program second 75. It occurs near
+media 77 in B and 137.056 in A. A 120-second observation allows either to play after
+the rewind. All consumed quarter-second windows are retained; eight consecutive
+windows must identify that passage in order. Silence or a missing window breaks
+the match, while a later complete replay after recovery may satisfy it. Nothing
+requires a particular cache key, source replacement or output recreation.
+Separate coherent-A and coherent-B controls use the same rewind and audio check.
+
+This directly checks one passage during forward replay across the staged join,
+without jumping to alternate target timestamps. It does not assert an inaudible
+transition, reproduce the private episode, or prove that every other passage is
+accessible. The initial priming, response ranges and consumed edition transitions
+remain diagnostics for verifying which behavior a particular run exercised.
 
 The 60.055510204-second fixture displacement comes from the earlier independent
 encoded-audio alignment captures, not from these logs' byte-length difference.
@@ -142,6 +157,6 @@ context once; it must leave a coherent version that the listener can seek.
 The logged total changes are detectable without an ETag. That supports preventing
 this kind of new splice, but is not a replay of the exact device incident or a
 promise to repair bytes already consumed. The evidence does not reveal a new
-production defect in the proposed fix. The gap above warrants additional
-independent replay coverage before claiming complete protection against every
-short missing passage; it does not justify changing the fix to fit these logs.
+production defect in the proposed fix. The targeted replay coverage above does not
+establish complete protection against every short missing passage; it does not
+justify changing the fix to fit these logs.
