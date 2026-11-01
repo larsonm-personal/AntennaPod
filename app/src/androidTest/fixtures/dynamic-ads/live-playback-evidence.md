@@ -132,6 +132,9 @@ windows must identify that passage in order. Silence or a missing window breaks
 the match, while a later complete replay after recovery may satisfy it. Nothing
 requires a particular cache key, source replacement or output recreation.
 Separate coherent-A and coherent-B controls use the same rewind and audio check.
+The B control starts at media second 27, near the primed A's program position.
+The 120-second setup bound permits this earlier resume before reaching second 100;
+it does not require a replacement to retain A's numeric timestamp.
 
 This directly checks one passage during forward replay across the staged join,
 without jumping to alternate target timestamps. It does not assert an inaudible
