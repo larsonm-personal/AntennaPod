@@ -37,7 +37,8 @@ public class ShortRewindTest extends PlaybackCase {
     @Test
     public void shortRewindReplaysReplacementEdition() throws Exception {
         start(false, 70, false);
-        select(addEpisode("B"), 70);
+        // Program second 25 is near media 87 in A and 27 in B.
+        select(addEpisode("B"), 27);
         app.onMain(() -> app.controller.play());
         rewindAndHearPassage(75);
     }

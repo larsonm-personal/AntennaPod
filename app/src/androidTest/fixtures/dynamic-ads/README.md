@@ -26,6 +26,8 @@ ten-second rewinds. It considers every consumed window until eight consecutive
 windows identify the two-second passage near program second 75, within a fixed
 120-second observation budget. Either edition and a recovery repeat are allowed;
 missing or silent windows cannot be dropped to assemble the passage.
+Setup also allows 120 seconds to reach media second 100. The coherent-B control
+starts at second 27, exercising a replacement that resumes earlier on its timeline.
 
 ## Coverage
 
