@@ -9,6 +9,8 @@ import android.webkit.URLUtil;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import androidx.annotation.VisibleForTesting;
+import androidx.core.util.Consumer;
 import androidx.core.util.Pair;
 import androidx.media3.common.DeviceInfo;
 import androidx.media3.common.ForwardingPlayer;
@@ -84,6 +86,16 @@ import java.util.concurrent.TimeUnit;
 public class Media3PlaybackService extends MediaLibraryService {
     private static final String TAG = "M3PlaybackService";
     private static final long POSITION_SAVE_INTERVAL_MS = 5000;
+    private static volatile Consumer<ExoPlayer> playerObserverForTests;
+
+    @VisibleForTesting
+    public static synchronized void setPlayerObserverForTests(@Nullable Consumer<ExoPlayer> observer) {
+        if (observer != null && playerObserverForTests != null) {
+            throw new IllegalStateException("A player observer is already registered");
+        }
+        playerObserverForTests = observer;
+    }
+
     private ExoPlayer exoPlayer;
     private Player player;
     private MediaLibrarySession mediaSession;
@@ -114,6 +126,10 @@ public class Media3PlaybackService extends MediaLibraryService {
         setMediaNotificationProvider(notificationProvider);
 
         exoPlayer = ExoPlayerUtils.buildPlayer(this);
+        Consumer<ExoPlayer> observer = playerObserverForTests;
+        if (observer != null) {
+            observer.accept(exoPlayer);
+        }
         exoPlayer.addListener(new Player.Listener() {
             @Override
             public void onAudioSessionIdChanged(int audioSessionId) {
