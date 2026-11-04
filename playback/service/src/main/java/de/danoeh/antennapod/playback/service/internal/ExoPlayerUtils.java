@@ -16,6 +16,7 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.ResolvingDataSource;
 import androidx.media3.datasource.cache.CacheDataSource;
+import androidx.media3.datasource.cache.CacheKeyFactory;
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor;
 import androidx.media3.datasource.cache.SimpleCache;
 import de.danoeh.antennapod.net.common.RedirectChecker;
@@ -26,6 +27,7 @@ import androidx.media3.exoplayer.drm.DrmSessionManagerProvider;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
 import androidx.media3.extractor.DefaultExtractorsFactory;
 import androidx.media3.extractor.mp3.Mp3Extractor;
 import de.danoeh.antennapod.net.common.NetworkUtils;
@@ -101,13 +103,18 @@ public class ExoPlayerUtils {
 
     @OptIn(markerClass = UnstableApi.class)
     public static class ApMediaSourceFactory implements MediaSource.Factory {
-        private LoadErrorHandlingPolicy loadErrorHandlingPolicy;
+        private LoadErrorHandlingPolicy loadErrorHandlingPolicy = new DefaultLoadErrorHandlingPolicy() {
+            @Override
+            public long getRetryDelayMsFor(LoadErrorInfo errorInfo) {
+                return ValidatingStreamDataSource.ChangedException.find(errorInfo.exception) == null
+                        ? super.getRetryDelayMsFor(errorInfo) : C.TIME_UNSET;
+            }
+        };
         private DrmSessionManagerProvider drmSessionManagerProvider;
         private final DefaultExtractorsFactory extractorsFactory;
         private final DefaultMediaSourceFactory defaultFactory;
         private final Context context;
         private final SimpleCache simpleCache;
-        private final ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
 
         public ApMediaSourceFactory(Context context, SimpleCache simpleCache) {
             super();
@@ -147,41 +154,52 @@ public class ExoPlayerUtils {
             return defaultFactory.createMediaSource(mediaItem);
         }
 
+        private DefaultHttpDataSource.Factory httpFactory(String authHeader) {
+            DefaultHttpDataSource.Factory factory = new DefaultHttpDataSource.Factory()
+                    .setUserAgent(UserAgentInterceptor.USER_AGENT)
+                    .setAllowCrossProtocolRedirects(true).setKeepPostFor302Redirects(true);
+            if (authHeader != null) {
+                factory.setDefaultRequestProperties(Collections.singletonMap("Authorization", authHeader));
+            }
+            return factory;
+        }
+
         private DataSource.Factory buildDataSourceFactory(MediaItem mediaItem) {
-            DefaultHttpDataSource.Factory httpDataSourceFactory =
-                    new DefaultHttpDataSource.Factory();
-            httpDataSourceFactory.setUserAgent(UserAgentInterceptor.USER_AGENT);
-            httpDataSourceFactory.setAllowCrossProtocolRedirects(true);
-            httpDataSourceFactory.setKeepPostFor302Redirects(true);
             String authHeader = mediaItem.requestMetadata.extras != null
                     ? mediaItem.requestMetadata.extras.getString(
                             MediaItemAdapter.KEY_AUTHORIZATION_HEADER)
                     : null;
-            if (authHeader != null) {
-                httpDataSourceFactory.setDefaultRequestProperties(
-                        Collections.singletonMap("Authorization", authHeader));
-            }
-            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpDataSourceFactory);
+            String uri = mediaItem.localConfiguration != null
+                    ? mediaItem.localConfiguration.uri.toString() : "";
+            StreamCacheGeneration generation = uri.startsWith("http") ? new StreamCacheGeneration(context, uri) : null;
+            DataSource.Factory httpFactory = generation != null
+                    ? () -> new ValidatingStreamDataSource(httpFactory(authHeader),
+                            simpleCache, generation) : httpFactory(authHeader);
+            DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context, httpFactory);
+            ConcurrentHashMap<String, String> redirectCache = new ConcurrentHashMap<>();
             DataSource.Factory resolvingFactory = new ResolvingDataSource.Factory(dataSourceFactory, dataSpec -> {
                 String originalUrl = dataSpec.uri.toString();
                 if (!originalUrl.startsWith("http")) {
                     return dataSpec;
                 }
-                String resolvedUrl = redirectCache.get(originalUrl);
+                Uri cachedUri = dataSpec.key == null ? null
+                        : ValidatingStreamDataSource.getCachedUri(simpleCache.getContentMetadata(dataSpec.key));
+                String resolvedUrl = cachedUri == null ? redirectCache.get(originalUrl) : cachedUri.toString();
                 if (resolvedUrl == null) {
                     resolvedUrl = RedirectChecker.getFinalUrl(originalUrl);
                     redirectCache.putIfAbsent(originalUrl, resolvedUrl);
+                    resolvedUrl = redirectCache.get(originalUrl);
                 }
                 if (resolvedUrl.equals(originalUrl)) {
                     return dataSpec;
                 }
                 return dataSpec.withUri(Uri.parse(resolvedUrl));
             });
-            String uri = mediaItem.localConfiguration != null
-                    ? mediaItem.localConfiguration.uri.toString() : "";
-            if (uri.startsWith("http")) {
+            if (generation != null) {
                 return new CacheDataSource.Factory()
                         .setCache(simpleCache)
+                        .setCacheKeyFactory(dataSpec -> generation.cacheKey(
+                                CacheKeyFactory.DEFAULT.buildCacheKey(dataSpec)))
                         .setUpstreamDataSourceFactory(resolvingFactory);
             }
             return resolvingFactory;
