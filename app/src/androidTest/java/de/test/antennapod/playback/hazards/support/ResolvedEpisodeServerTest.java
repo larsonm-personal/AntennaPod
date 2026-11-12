@@ -3,6 +3,7 @@ package de.test.antennapod.playback.hazards.support;
 import androidx.test.platform.app.InstrumentationRegistry;
 
 import org.apache.commons.io.IOUtils;
+import org.awaitility.Awaitility;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,14 +16,12 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Arrays;
-import java.util.concurrent.FutureTask;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @IgnoreOnCi
 public class ResolvedEpisodeServerTest {
@@ -76,23 +75,32 @@ public class ResolvedEpisodeServerTest {
 
     @Test
     public void responseSlowsAfterTheRequestedBoundary() throws Exception {
+        CountDownLatch gate = new CountDownLatch(1) {
+            @Override
+            public boolean await(long timeout, TimeUnit unit) {
+                assertEquals(1, timeout);
+                assertEquals(TimeUnit.SECONDS, unit);
+                return false;
+            }
+        };
+        byte[] received = new byte[bytes.length];
+        try (InputStream body = server.responseBody(bytes, gate, 1024)) {
+            assertEquals(1024, body.read(received));
+            assertEquals(1, body.read(received, 1024, received.length - 1024));
+            assertEquals(1, body.read(received, 1025, received.length - 1025));
+            gate.countDown();
+            assertEquals(received.length - 1026, body.read(received, 1026, received.length - 1026));
+            assertArrayEquals(bytes, received);
+        }
         server.throttleResponsesAfter(1024);
         HttpURLConnection response = open("A", "bytes=1000-");
         try (InputStream input = response.getInputStream()) {
             byte[] prefix = new byte[1024];
             IOUtils.readFully(input, prefix);
             assertArrayEquals(Arrays.copyOfRange(bytes, 1000, 2024), prefix);
-            FutureTask<Integer> nextByte = new FutureTask<>(() -> input.read());
-            new Thread(nextByte, "FixtureResponseRead").start();
-            try {
-                nextByte.get(500, TimeUnit.MILLISECONDS);
-                fail("The response did not slow at the requested boundary");
-            } catch (TimeoutException expected) {
-                assertTrue(server.hasThrottledResponse());
-            }
+            Awaitility.await().atMost(5, TimeUnit.SECONDS).until(server::hasThrottledResponse);
             server.resumeResponses();
-            assertEquals(bytes[2024] & 0xff, (int) nextByte.get(5, TimeUnit.SECONDS));
-            assertArrayEquals(Arrays.copyOfRange(bytes, 2025, 6000), IOUtils.toByteArray(input));
+            assertArrayEquals(Arrays.copyOfRange(bytes, 2024, 6000), IOUtils.toByteArray(input));
         } finally {
             server.resumeResponses();
             response.disconnect();

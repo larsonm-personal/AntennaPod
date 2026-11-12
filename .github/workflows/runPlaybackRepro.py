@@ -84,6 +84,13 @@ def run_adb(arguments, path, timeout=60):
             return 124
 
 
+def save_summary(summary, folder):
+    report = "\n".join(summary)
+    (folder / "summary.md").write_text(report, encoding="utf-8")
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        Path(os.environ["GITHUB_STEP_SUMMARY"]).write_text(report, encoding="utf-8")
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Replay a changed ad layout through AntennaPod's service and cache")
@@ -106,6 +113,8 @@ def main():
             print(f"Run {repetition}/{args.repetitions}", flush=True)
             folder = args.output / f"run-{repetition}"
             folder.mkdir(exist_ok=True)
+            summary += [f"### Run {repetition}", ""]
+            save_summary(summary + ["Instrumentation running; results pending.", ""], args.output)
             if run_adb(["logcat", "-c"], folder / "logcat-clear.txt"):
                 raise RuntimeError("Could not clear logcat")
             with (folder / "logcat.txt").open("w", encoding="utf-8") as log:
@@ -117,10 +126,17 @@ def main():
                                       "de.danoeh.antennapod.core.tests/androidx.test.runner.AndroidJUnitRunner"],
                                      folder / "instrumentation.txt", 900)
                 finally:
+                    capture_ended_early = capture.poll() is not None
                     capture.terminate()
-                    capture.wait(timeout=15)
+                    try:
+                        capture_status = capture.wait(timeout=15)
+                    except subprocess.TimeoutExpired:
+                        capture.kill()
+                        capture.wait(timeout=5)
+                        raise
+                    (folder / "logcat-exit-code.txt").write_text(str(capture_status), encoding="utf-8")
             (folder / "exit-code.txt").write_text(str(status), encoding="utf-8")
-            summary += [f"### Run {repetition}", "", "| Scenario | Result |", "|---|---|"]
+            summary += ["| Scenario | Result |", "|---|---|"]
             try:
                 if status:
                     raise ValueError(f"adb exited with status {status}")
@@ -143,18 +159,25 @@ def main():
                 failed = True
                 summary += [f"| Runner | ERROR: {html.escape(str(error))} |", ""]
                 print(f"Run {repetition}: {error}", flush=True)
+            if capture_ended_early:
+                failed = True
+                error = f"Log capture ended early (status {capture_status}); device diagnostics are incomplete."
+                summary += ["", f"**Capture error:** {error}", ""]
+                print(error, file=sys.stderr)
+            if status == 124:
+                run_adb(["shell", "am", "force-stop", "de.danoeh.antennapod.debug"], folder / "stop-after-timeout.txt")
+                summary += ["Further repetitions stopped after the instrumentation timeout.", ""]
+            save_summary(summary, args.output)
+            if status == 124:
+                break
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         failed = True
         summary += ["", f"Setup/capture error: {html.escape(str(error))}", ""]
         print(str(error), file=sys.stderr)
     finally:
-        summary += ["Full instrumentation and device logs are attached as `playback-repro`.",
+        summary += ["Available instrumentation and device logs are attached as `playback-repro`.",
                     "These synthetic episodes demonstrate cache/stream mixing, not the exact phone incident.", ""]
-        report = "\n".join(summary)
-        (args.output / "summary.md").write_text(report, encoding="utf-8")
-        if os.environ.get("GITHUB_STEP_SUMMARY"):
-            with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
-                output.write(report)
+        save_summary(summary, args.output)
     return int(failed)
 
 

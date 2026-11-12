@@ -10,11 +10,14 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.PlayerMessage;
 import androidx.media3.exoplayer.Renderer;
+import androidx.media3.exoplayer.analytics.AnalyticsListener;
 import androidx.media3.exoplayer.audio.AudioOutput;
 import androidx.media3.exoplayer.audio.AudioOutputProvider;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutput;
 import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider;
 import androidx.media3.exoplayer.audio.ForwardingAudioOutputProvider;
+import androidx.media3.exoplayer.source.LoadEventInfo;
+import androidx.media3.exoplayer.source.MediaLoadData;
 import androidx.test.filters.LargeTest;
 
 import de.danoeh.antennapod.playback.base.MediaItemAdapter;
@@ -25,8 +28,10 @@ import org.awaitility.core.ConditionTimeoutException;
 import org.junit.After;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -42,6 +47,7 @@ public abstract class PlaybackCase {
     protected final ServicePlaybackFixture app = new ServicePlaybackFixture();
     protected final ResolvedTaggedAudio audio = new ResolvedTaggedAudio();
     private final List<PlayerMessage> messages = new ArrayList<>();
+    private final Set<Long> activeLoads = new HashSet<>();
     private boolean initialized;
     private ExoPlayer observedPlayer;
     private volatile long requestedSeek = -1;
@@ -66,6 +72,20 @@ public abstract class PlaybackCase {
             return app.server.hasThrottledResponse() && !heard.isEmpty()
                     && heard.get(heard.size() - 1).edition == 0
                     && heard.get(heard.size() - 1).program >= 25;
+        });
+        app.onMain(() -> {
+            observedPlayer.pause();
+            observedPlayer.setTrackSelectionParameters(observedPlayer.getTrackSelectionParameters().buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build());
+        });
+        AtomicBoolean closed = new AtomicBoolean();
+        Awaitility.await().atMost(30, TimeUnit.SECONDS).until(() -> {
+            app.onMain(() -> {
+                assertNull("Playback failed while closing the priming load", observedPlayer.getPlayerError());
+                closed.set(!observedPlayer.getCurrentTracks().isTypeSelected(C.TRACK_TYPE_AUDIO)
+                        && activeLoads.isEmpty());
+            });
+            return closed.get();
         });
         app.stopService();
         app.assertPartialCache();
@@ -137,6 +157,7 @@ public abstract class PlaybackCase {
         AtomicBoolean paused = new AtomicBoolean();
         Awaitility.await().atMost(120, TimeUnit.SECONDS).until(() -> {
             app.onMain(() -> {
+                assertNull("Playback failed before rewind", app.controller.getPlayerError());
                 if (app.controller.getCurrentPosition() >= 100000) {
                     app.controller.pause();
                     paused.set(true);
@@ -210,6 +231,25 @@ public abstract class PlaybackCase {
 
     private void observe(ExoPlayer player) {
         observedPlayer = player;
+        activeLoads.clear();
+        player.addAnalyticsListener(new AnalyticsListener() {
+            @Override
+            public void onLoadStarted(EventTime time, LoadEventInfo info, MediaLoadData data, int retryCount) {
+                if (data.dataType == C.DATA_TYPE_MEDIA) {
+                    activeLoads.add(info.loadTaskId);
+                }
+            }
+
+            @Override
+            public void onLoadCompleted(EventTime time, LoadEventInfo info, MediaLoadData data) {
+                activeLoads.remove(info.loadTaskId);
+            }
+
+            @Override
+            public void onLoadCanceled(EventTime time, LoadEventInfo info, MediaLoadData data) {
+                activeLoads.remove(info.loadTaskId);
+            }
+        });
         player.addListener(new Player.Listener() {
             @Override
             public void onPositionDiscontinuity(Player.PositionInfo oldPosition, Player.PositionInfo newPosition,

@@ -33,6 +33,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.Date;
+import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -91,8 +92,14 @@ public final class ServicePlaybackFixture {
 
     public void connect() throws Exception {
         SessionToken token = new SessionToken(context, new ComponentName(context, Media3PlaybackService.class));
-        controller = new MediaController.Builder(context, token).setApplicationLooper(Looper.getMainLooper())
-                .buildAsync().get(30, TimeUnit.SECONDS);
+        Future<MediaController> connection = new MediaController.Builder(context, token)
+                .setApplicationLooper(Looper.getMainLooper()).buildAsync();
+        try {
+            controller = connection.get(30, TimeUnit.SECONDS);
+        } catch (Exception error) {
+            onMain(() -> MediaController.releaseFuture(connection));
+            throw error;
+        }
     }
 
     public void stopService() throws Exception {

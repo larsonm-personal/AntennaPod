@@ -110,9 +110,18 @@ public final class ResolvedEpisodeServer extends NanoHTTPD {
         } catch (IOException error) {
             return new Response(Response.Status.INTERNAL_ERROR, "text/plain", "");
         }
-        CountDownLatch gate = responseGate;
-        int limit = throttleAfter;
-        InputStream body = new ByteArrayInputStream(bytes) {
+        Response response = new Response(range == null ? Response.Status.OK : Response.Status.PARTIAL_CONTENT,
+                "audio/mpeg", responseBody(bytes, responseGate, throttleAfter));
+        response.addHeader("Content-Length", String.valueOf(bytes.length));
+        response.addHeader("Accept-Ranges", "bytes");
+        if (range != null) {
+            response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + file.length());
+        }
+        return response;
+    }
+
+    InputStream responseBody(byte[] bytes, CountDownLatch gate, int limit) {
+        return new ByteArrayInputStream(bytes) {
             private int sent;
 
             @Override
@@ -137,14 +146,6 @@ public final class ResolvedEpisodeServer extends NanoHTTPD {
                 return count;
             }
         };
-        Response response = new Response(range == null ? Response.Status.OK : Response.Status.PARTIAL_CONTENT,
-                "audio/mpeg", body);
-        response.addHeader("Content-Length", String.valueOf(bytes.length));
-        response.addHeader("Accept-Ranges", "bytes");
-        if (range != null) {
-            response.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + file.length());
-        }
-        return response;
     }
 
     private Response unsatisfiable(File file) {

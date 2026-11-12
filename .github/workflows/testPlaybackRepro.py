@@ -1,4 +1,7 @@
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 import runPlaybackRepro as repro
 
@@ -61,6 +64,56 @@ class ReporterTest(unittest.TestCase):
         output = self.output(self.results())
         with self.assertRaises(ValueError):
             repro.parse_results(output + output)
+
+    def run_script(self, results, statuses, capture_status=None):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            calls = []
+
+            def adb(arguments, path, timeout=60):
+                calls.append(arguments)
+                if arguments[0] == "shell" and arguments[1] == "am" and arguments[2] == "instrument":
+                    saved = (folder / "summary.md").read_text(encoding="utf-8")
+                    self.assertIn("results pending", saved)
+                    if len([call for call in calls if "instrument" in call]) > 1:
+                        self.assertIn("| Audio observer and HTTP fixture controls |", saved)
+                    path.write_text(self.output(results), encoding="utf-8")
+                    return statuses.pop(0)
+                path.write_text("Success", encoding="utf-8")
+                return 0
+
+            capture = Mock()
+            capture.poll.return_value = capture_status
+            capture.wait.return_value = capture_status if capture_status is not None else -15
+            with patch.object(repro, "run_adb", side_effect=adb), \
+                    patch.object(repro.subprocess, "Popen", return_value=capture), \
+                    patch.object(repro.sys, "argv", ["repro", "--output", directory]), \
+                    patch.object(repro.sys, "stdout"), patch.object(repro.sys, "stderr"), \
+                    patch.dict(repro.os.environ, {"GITHUB_ACTIONS": "false", "GITHUB_STEP_SUMMARY": ""}):
+                status = repro.main()
+            return status, (folder / "summary.md").read_text(encoding="utf-8"), calls
+
+    def test_capture_failure_is_reported_even_with_complete_test_results(self):
+        status, summary, _ = self.run_script(self.results(), [0, 0, 0], capture_status=1)
+        self.assertEqual(1, status)
+        self.assertIn("Capture error", summary)
+        self.assertIn("diagnostics are incomplete", summary)
+
+    def test_timeout_stops_instrumentation_and_further_repetitions(self):
+        status, summary, calls = self.run_script(self.results(), [124])
+        self.assertEqual(1, status)
+        self.assertEqual(1, len([call for call in calls if "instrument" in call]))
+        self.assertIn(["shell", "am", "force-stop", "de.danoeh.antennapod.debug"], calls)
+        self.assertIn("Further repetitions stopped", summary)
+
+    def test_hazards_continue_and_each_result_is_saved_before_the_next_run(self):
+        results = self.results()
+        results[(repro.PACKAGE + ".ShortRewindTest", next(iter(repro.CASES)))] = (-2, repro.MISSING)
+        status, summary, calls = self.run_script(results, [0, 0, 0])
+        self.assertEqual(1, status)
+        self.assertEqual(3, len([call for call in calls if "instrument" in call]))
+        self.assertEqual(3, summary.count("Hazard reproduced:"))
+        self.assertNotIn("results pending", summary)
 
 
 if __name__ == "__main__":
