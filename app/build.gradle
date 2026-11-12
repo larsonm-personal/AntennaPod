@@ -54,6 +54,8 @@ android {
     androidResources {
         additionalParameters += ["--no-version-vectors"]
     }
+
+    sourceSets.androidTest.assets.srcDir(layout.buildDirectory.dir("generated/playbackFixtures").get().asFile)
 }
 
 dependencies {
@@ -130,6 +132,7 @@ dependencies {
 
     androidTestImplementation libs.awaitility
     androidTestImplementation libs.nanohttpd
+    androidTestImplementation libs.androidx.media3.exoplayer
     androidTestImplementation libs.androidx.test.espresso.core
     androidTestImplementation libs.androidx.test.espresso.contrib
     androidTestImplementation libs.androidx.test.espresso.intents
